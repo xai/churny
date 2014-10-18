@@ -21,6 +21,7 @@
  * - on-demand checkout from a server
  * - take 2 directories as input
  * - take 2 tars as input
+ * - print timestamps for first and last commit analyzed
  *
  * TODO: Maintenance
  * - create unit tests
@@ -192,7 +193,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	return churn;
 }
 
-int calculate_code_churn(git_repository *repo) {
+unsigned long int calculate_code_churn(git_repository *repo) {
 
 	const char id[] = "calculate_code_churn";
 #ifdef DEBUG
@@ -206,7 +207,7 @@ int calculate_code_churn(git_repository *repo) {
 	git_oid head;
 	git_revwalk *walk = NULL;
 	int num_commits = 0;
-	int total_changed_lines = 0;
+	unsigned long int total_changed_lines = 0;
 
 	git_reference_name_to_id(&head, repo, "HEAD");
 	git_revwalk_new(&walk, repo);
@@ -244,8 +245,8 @@ int calculate_code_churn(git_repository *repo) {
 
 	// print results
 	print_csv_header();
-	printf("%d,%d,%d;%d;%f\n", num_commits, first_loc, head_loc,
-			total_changed_lines, churn); // TODO
+	printf("%d;%d;%d;%lu;%f;\n", num_commits, first_loc, head_loc,
+			total_changed_lines, churn);
 
 	// cleanup
 	git_revwalk_free(walk);
