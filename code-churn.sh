@@ -7,7 +7,7 @@ function usage() {
 }
 
 function print_header() {
-	echo "LoC;Changed LoC;Relative Code Churn;"
+	echo "Initial LoC;HEAD LoC;Changed LoC;Relative Code Churn;"
 }
 
 function diff() {
@@ -17,7 +17,8 @@ function diff() {
 			continue
 		fi
 
-		git diff --numstat $prev $cur | grep '^[[:digit:]]' | grep '\.c$\|\.h$' | awk 'BEGIN { churn=0 } { churn+=$1; churn+=$2 } END { print churn }'
+		#git diff --numstat $prev $cur | grep '^[[:digit:]]' | grep '\.c$\|\.h$' | awk 'BEGIN { churn=0 } { churn+=$1; churn+=$2 } END { print churn }'
+		git diff --numstat $prev $cur | grep '^[[:digit:]]' | awk 'BEGIN { churn=0 } { churn+=$1; churn+=$2 } END { print churn }'
 
 		local prev=$cur
 	done < <(git rev-list --all --no-merges --reverse) | awk 'BEGIN { churn=0 } { churn+=$1 } END { print churn }'
@@ -26,7 +27,13 @@ function diff() {
 function getLoC() {
 	tmpfile=$(mktemp) || ( echo "Error: could not create temporary file!" && exit 1 )
 
-	find -regex '.*/.*\.\(c\|h\)$' -print0 > $tmpfile
+	if [ ! -z $1 ]; then
+		# checkout revision
+		git checkout -q -f $1
+	fi
+
+	#find -regex '.*/.*\.\(c\|h\)$' -print0 > $tmpfile
+	find . -type f -not -path "./.git/*" -print0 > $tmpfile
 	local loc=$(wc --files0-from=$tmpfile | tail -n 1 | awk ' {print $1 }')
 
 	rm $tmpfile
@@ -48,60 +55,61 @@ function float_eval()
 }
 
 function calculate() {
-	local loc=$(getLoC)
-	local changed_loc=$(diff)
-	local relative_churn=$(float_eval "$changed_loc / $loc")
-	echo "${loc};${changed_loc};${relative_churn}"
+local initial_loc=$(getLoC $(git rev-list --all --reverse | head -n1))
+local head_loc=$(getLoC $(git rev-list --all | head -n1))
+local changed_loc=$(diff)
+local relative_churn=$(float_eval "$changed_loc / $initial_loc")
+echo "${initial_loc};${head_loc};${changed_loc};${relative_churn};"
 }
 
 function commit_all() {
-	git add -A >/dev/null 2>&1
-	git commit -a -m "Automatic commit of $1" >/dev/null 2>&1
+git add -A >/dev/null 2>&1
+git commit -a -m "Automatic commit of $1" >/dev/null 2>&1
 }
 
 function commit_dir() {
-	[ ! -d $1 ] && echo "Error: Not a directory: $1" && exit 1
-	rsync -aq --delete --exclude='.git/' ${1}/ .
-	commit_all "$1"
+[ ! -d $1 ] && echo "Error: Not a directory: $1" && exit 1
+rsync -aq --delete --exclude='.git/' ${1}/ .
+commit_all "$1"
 }
 
 function import_dirs() {
-	tmprepo=$(mktemp -d) || ( echo "Error: could not create temporary directory!" && exit 1 )
+tmprepo=$(mktemp -d) || ( echo "Error: could not create temporary directory!" && exit 1 )
 
-	local dir1=$(realpath $1)
-	local dir2=$(realpath $2)
-	
-	cd $tmprepo
-	git init >/dev/null 2>&1
-	commit_dir $dir1
-	commit_dir $dir2
-	echo $tmprepo
+local dir1=$(realpath $1)
+local dir2=$(realpath $2)
+
+cd $tmprepo
+git init >/dev/null 2>&1
+commit_dir $dir1
+commit_dir $dir2
+echo $tmprepo
 }
 
 function check_tar() {
-	tar -taf $1 >/dev/null
-	return $?
+tar -taf $1 >/dev/null
+return $?
 }
 
 function import_tars() {
-	tmpdir=$(mktemp -d) || ( echo "Error: could not create temporary directory!" && exit 1 )
+tmpdir=$(mktemp -d) || ( echo "Error: could not create temporary directory!" && exit 1 )
 
-	if ! check_tar $1; then
-		echo "Error. Something is wrong with the tar: $1"
-		exit 1
-	fi
+if ! check_tar $1; then
+	echo "Error. Something is wrong with the tar: $1"
+	exit 1
+fi
 
-	if ! check_tar $2; then
-		echo "Error. Something is wrong with the tar: $2"
-		exit 1
-	fi
+if ! check_tar $2; then
+	echo "Error. Something is wrong with the tar: $2"
+	exit 1
+fi
 
-	tar -C $tmpdir -xaf $1 >/dev/null
-	tar -C $tmpdir -xaf $2 >/dev/null
-	
-	local tmprepo=$(import_dirs ${tmpdir}/*)
-	rm -rf $tmpdir
-	echo $tmprepo
+tar -C $tmpdir -xaf $1 >/dev/null
+tar -C $tmpdir -xaf $2 >/dev/null
+
+local tmprepo=$(import_dirs ${tmpdir}/*)
+rm -rf $tmpdir
+echo $tmprepo
 }
 
 while getopts ":h" opt; do
