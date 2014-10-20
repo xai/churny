@@ -58,7 +58,7 @@ function calculate() {
 local initial_loc=$(getLoC $(git rev-list --all --reverse | head -n1))
 local head_loc=$(getLoC $(git rev-list --all | head -n1))
 local changed_loc=$(diff)
-local relative_churn=$(float_eval "$changed_loc / $initial_loc")
+local relative_churn=$(float_eval "$changed_loc / $head_loc")
 echo "${initial_loc};${head_loc};${changed_loc};${relative_churn};"
 }
 

@@ -239,13 +239,11 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 
 	// compute relative code churn
 	double churn = head_loc;
-	if (first_loc > 0) {
-		churn = (double) total_changed_lines / (double) first_loc;
-	}
+	churn = (double) total_changed_lines / (double) head_loc;
 
 	// print results
 	print_csv_header();
-	printf("%d;%d;%d;%lu;%f;\n", num_commits, first_loc, head_loc,
+	printf("%d;%d;%d;%lu;%.2f;\n", num_commits, first_loc, head_loc,
 			total_changed_lines, churn);
 
 	// cleanup
