@@ -71,7 +71,7 @@ void usage(const char *basename) {
 }
 
 void print_csv_header(void) {
-	printf("Commits;Initial LoC;HEAD LoC;Changed LoC;Relative Code Churn;\n");
+	printf("Commits;Initial LoC;HEAD LoC;Ratio;Changed LoC;Relative Code Churn;\n");
 }
 
 int calculate_loc(git_repository *repo, const git_oid *oid) {
@@ -85,6 +85,7 @@ int calculate_loc(git_repository *repo, const git_oid *oid) {
 	opts.checkout_strategy = GIT_CHECKOUT_FORCE;
 
 	if (oid != NULL) {
+	chdir(git_repository_workdir(repo));
 
 #ifdef DEBUG
 		char buf[GIT_OID_HEXSZ + 1];
@@ -101,9 +102,9 @@ int calculate_loc(git_repository *repo, const git_oid *oid) {
 	}
 
 	FILE *fp;
-	chdir(git_repository_workdir(repo));
 
-	fp = popen("git ls-files 2>/dev/null | xargs cat | wc -l", "r");
+	//fp = popen("git ls-files 2>/dev/null | xargs cat 2>/dev/null | wc -l", "r");
+	fp = popen("find . -type f -not -path './.git/*' -print | xargs cat 2>/dev/null | wc -l", "r");
 	char prbuf[1024];
 	memset(prbuf, 0, sizeof(prbuf));
 
@@ -220,7 +221,6 @@ unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
 	// walk over revisions and sum up code churn
 	git_oid prev_oid;
 	git_oid cur_oid;
-	git_oid first;
 	git_oid head;
 	git_revwalk *walk = NULL;
 	git_commit *commit;
@@ -259,10 +259,6 @@ unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
 		}
 
 		prev_oid = cur_oid;
-
-		if (num_commits == 1) {
-			first = cur_oid;
-		}
 	}
 
 	git_commit_free(commit);
@@ -279,8 +275,9 @@ unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
 	}
 	
 	// count lines of code
-	int first_loc = calculate_loc(repo, &first);
+	int first_loc = calculate_loc(repo, &prev_oid);
 	int head_loc = calculate_loc(repo, &head);
+	double ratio = (double) first_loc / (double) head_loc;
 
 	// compute relative code churn
 	double churn = head_loc;
@@ -288,8 +285,8 @@ unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
 
 	// print results
 	print_csv_header();
-	printf("%d;%d;%d;%lu;%.2f;\n", num_commits, first_loc, head_loc,
-			total_changed_lines, churn);
+	printf("%d;%d;%d;%.2f;%lu;%.2f;\n", num_commits, first_loc, head_loc,
+	       ratio, total_changed_lines, churn);
 
 	// cleanup
 	git_revwalk_free(walk);
