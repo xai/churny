@@ -66,6 +66,7 @@ static void exit_error(const int err, const char *format, ...) {
 void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
+	printf("  n K\tConsider only K commits\n");
 	printf("  t K\tConsider only commits within the last K years\n");
 	printf("\n");
 }
@@ -212,7 +213,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	return churn;
 }
 
-unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
+unsigned long int calculate_code_churn(git_repository *repo, int max_commits, time_t min_time) {
 	const char id[] = "calculate_code_churn";
 #ifdef DEBUG
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -249,6 +250,13 @@ unsigned long int calculate_code_churn(git_repository *repo, time_t min_time) {
 #endif
 				break;
 			}
+		}
+
+		if (max_commits != 0 && num_commits >= max_commits) {
+#ifdef DEBUG
+			print_debug("Maximum specified amount of commits found: %d\n", max_commits);
+#endif
+			break;
 		}
 	
 		num_commits = num_commits + 1;
@@ -313,12 +321,21 @@ int main(int argc, char **argv) {
 	// parse arguments
 	int c;
 	time_t min_time = 0;
+	int max_commits = 0;
 
-	while ((c = getopt(argc, argv, "ht:")) != -1) {
+	while ((c = getopt(argc, argv, "hn:t:")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
 			return EXIT_SUCCESS;
+		case 'n':
+#ifdef DEBUG
+			print_debug("Only the last %d commits are considered.\n",
+				    atoi(optarg));
+#endif
+			// this is actually inaccurate
+			max_commits = atoi(optarg);
+			break;
 		case 't':
 #ifdef DEBUG
 			print_debug("Only commits within the last %d years are considered.\n",
@@ -426,7 +443,7 @@ int main(int argc, char **argv) {
 
 	if (repo != NULL) {
 		// run the actual analysis
-		calculate_code_churn(repo, min_time);
+		calculate_code_churn(repo, max_commits, min_time);
 
 		// cleanup
 		git_repository_free(repo);
