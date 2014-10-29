@@ -67,12 +67,13 @@ void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
 	printf("  n K\tConsider only K commits\n");
-	printf("  t K\tConsider only commits within the last K years\n");
+	printf("  f K[dmy]\tConsider only commits within the last K [d]ays/[m]onths/[y]ears\n");
+	printf("  i K[dmy]\tCalculate churn for intervals of K [d]ays/[m]onths/[y]ears'n");
 	printf("\n");
 }
 
 void print_csv_header(void) {
-	printf("Commits;Initial LoC;HEAD LoC;Ratio;Changed LoC;Relative Code Churn;\n");
+	printf("Date First;Date Last;Commits;Initial LoC;HEAD LoC;Ratio;Changed LoC;Relative Code Churn;\n");
 }
 
 int calculate_loc(git_repository *repo, const git_oid *oid) {
@@ -213,7 +214,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	return churn;
 }
 
-unsigned long int calculate_code_churn(git_repository *repo, int max_commits, time_t min_time) {
+unsigned long int calculate_code_churn(git_repository *repo, int max_commits, time_t min_time, time_t interval) {
 	const char id[] = "calculate_code_churn";
 #ifdef DEBUG
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -226,23 +227,39 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 	git_revwalk *walk = NULL;
 	git_commit *commit;
 	time_t commit_time;
+	time_t max_time = 0;
+	int time_string_length = strlen("2014-10-23") + 1;
 	int num_commits = 0;
 	unsigned long int total_changed_lines = 0;
+	struct tm *tm;
+	char from_time_string[time_string_length];
+	char to_time_string[time_string_length];
+
+	if (interval != 0) {
+		max_time = min_time + interval;
+	}
 
 	git_reference_name_to_id(&head, repo, "HEAD");
 	git_revwalk_new(&walk, repo);
 	git_revwalk_sorting(walk, GIT_SORT_TIME);
 	git_revwalk_push(walk, &head);
 
+        // iterates over all commits starting with the latest one
 	while (!git_revwalk_next(&cur_oid, walk)) {
-	  
+		
+		git_commit_lookup(&commit, repo, &cur_oid);
+		commit_time = git_commit_time(commit);
+		
+		if (max_time == 0) {
+			max_time = commit_time;
+		}
+  
 		if (min_time != 0) {
-			git_commit_lookup(&commit, repo, &cur_oid);
-			commit_time = git_commit_time(commit);
-			if (commit_time < min_time) {
+			// if a minimum time is specified, stop if the commit is older than it
+					
+			if (commit_time < min_time || commit_time > max_time) {
 #ifdef DEBUG
 				struct tm *tm;
-				int time_string_length = strlen("2014-10-23 19:13") + 1;
 				char commit_time_string[time_string_length];
 				tm = localtime(&commit_time);
 				strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
@@ -273,10 +290,21 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 
 #ifdef DEBUG
 	char s[2] = "";
-	if (num_commits != 1)
+	if (num_commits != 1) {
 		s[0] = 's';
+	}
 	print_debug("%s %s - %d commits found\n", debug, id, num_commits);
 #endif
+
+	if (min_time == 0) {
+		// if no minimum time was specified, set to oldest commit found
+		min_time = commit_time;
+	}
+
+	tm = localtime(&min_time);
+	strftime(from_time_string, time_string_length, "%F %H:%M", tm);
+	tm = localtime(&max_time);
+	strftime(to_time_string, time_string_length, "%F %H:%M", tm);
 
 	if (num_commits == 0) {
 		return 0;
@@ -292,8 +320,7 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 	churn = (double) total_changed_lines / (double) head_loc;
 
 	// print results
-	print_csv_header();
-	printf("%d;%d;%d;%.2f;%lu;%.2f;\n", num_commits, first_loc, head_loc,
+	printf("%s;%s;%d;%d;%d;%.2f;%lu;%.2f;\n", from_time_string, to_time_string, num_commits, first_loc, head_loc,
 	       ratio, total_changed_lines, churn);
 
 	// cleanup
@@ -320,10 +347,13 @@ int main(int argc, char **argv) {
 
 	// parse arguments
 	int c;
+	time_t now = time(NULL);
 	time_t min_time = 0;
+	time_t max_time = 0;
+	long interval = 0;
 	int max_commits = 0;
 
-	while ((c = getopt(argc, argv, "hn:t:")) != -1) {
+	while ((c = getopt(argc, argv, "hn:f:i:")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
@@ -336,16 +366,24 @@ int main(int argc, char **argv) {
 			// this is actually inaccurate
 			max_commits = atoi(optarg);
 			break;
-		case 't':
+		case 'f':
 #ifdef DEBUG
 			print_debug("Only commits within the last %d years are considered.\n",
 				    atoi(optarg));
 #endif
 			// this is actually inaccurate
-			min_time = time(NULL) - atoi(optarg) * 365 * 24 * 60 * 60;
+			min_time = now - atoi(optarg) * 365 * 24 * 60 * 60;
 #ifdef DEBUG
 			print_debug("Only commits after date %d are considered\n", min_time);
 #endif
+			break;
+		case 'i':
+#ifdef DEBUG
+			print_debug("Calculate churn for intervals of %d years.\n",
+				    atoi(optarg));
+#endif
+			// this is actually inaccurate
+			interval = atoi(optarg) * 365 * 24 * 60 * 60;
 			break;
 		default:
 			printf ("?? getopt returned character code 0%o ??\n", c);
@@ -442,8 +480,13 @@ int main(int argc, char **argv) {
 	}
 
 	if (repo != NULL) {
+		print_csv_header();
+
 		// run the actual analysis
-		calculate_code_churn(repo, max_commits, min_time);
+		while (min_time < now) {
+			calculate_code_churn(repo, max_commits, min_time, interval);
+			min_time = interval > 0 ? min_time + interval : now;
+		}
 
 		// cleanup
 		git_repository_free(repo);
