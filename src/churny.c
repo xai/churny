@@ -68,7 +68,9 @@ void usage(const char *basename) {
 	printf("  h\tPrints this message\n");
 	printf("  n K\tConsider only K commits\n");
 	printf("  f K[dmy]\tConsider only commits within the last K [d]ays/[m]onths/[y]ears\n");
-	printf("  i K[dmy]\tCalculate churn for intervals of K [d]ays/[m]onths/[y]ears'n");
+	printf("  i K[dmy]\tCalculate churn for intervals of K [d]ays/[m]onths/[y]ears\n");
+	printf("  m calculate churn seperately for each month\n");
+	printf("  y calculate churn seperately for each year\n");
 	printf("\n");
 }
 
@@ -214,7 +216,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	return churn;
 }
 
-unsigned long int calculate_code_churn(git_repository *repo, int max_commits, time_t min_time, time_t interval) {
+unsigned long int calculate_code_churn(git_repository *repo, int max_commits, time_t min_time, time_t max_time) {
 	const char id[] = "calculate_code_churn";
 #ifdef DEBUG
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -227,7 +229,8 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 	git_revwalk *walk = NULL;
 	git_commit *commit;
 	time_t commit_time;
-	time_t max_time = 0;
+	time_t first_commit_time = 0;
+	time_t last_commit_time = 0;
 	int time_string_length = strlen("2014-10-23") + 1;
 	int num_commits = 0;
 	unsigned long int total_changed_lines = 0;
@@ -235,14 +238,19 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 	char from_time_string[time_string_length];
 	char to_time_string[time_string_length];
 
-	if (interval != 0) {
-		max_time = min_time + interval;
-	}
-
 	git_reference_name_to_id(&head, repo, "HEAD");
 	git_revwalk_new(&walk, repo);
 	git_revwalk_sorting(walk, GIT_SORT_TIME);
 	git_revwalk_push(walk, &head);
+
+#ifdef DEBUG
+	tm = localtime(&min_time);
+	strftime(from_time_string, time_string_length, "%F %H:%M", tm);
+	tm = localtime(&max_time);
+	strftime(to_time_string, time_string_length, "%F %H:%M", tm);
+	print_debug("min_time=%s, max_time=%s, max_commits=%d\n", from_time_string, to_time_string, max_commits);
+#endif
+
 
         // iterates over all commits starting with the latest one
 	while (!git_revwalk_next(&cur_oid, walk)) {
@@ -250,24 +258,34 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 		git_commit_lookup(&commit, repo, &cur_oid);
 		commit_time = git_commit_time(commit);
 		
-		if (max_time == 0) {
-			max_time = commit_time;
+		if (commit_time > max_time) {
+			continue;
 		}
-  
-		if (min_time != 0) {
-			// if a minimum time is specified, stop if the commit is older than it
-					
-			if (commit_time < min_time || commit_time > max_time) {
+
+		if (last_commit_time == 0) {
+			last_commit_time = commit_time;
+		}
+
 #ifdef DEBUG
-				struct tm *tm;
-				char commit_time_string[time_string_length];
-				tm = localtime(&commit_time);
-				strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-				print_debug("Commit is not in specified time window: %s\n", commit_time_string);
+		char commit_time_string[time_string_length];
+		tm = localtime(&commit_time);
+		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
+		print_debug("Commit found: %s\n", commit_time_string);
 #endif
-				break;
-			}
+
+  
+		// stop if the commit is older than min_time or newer than max_time
+		if (commit_time < min_time) {
+#ifdef DEBUG
+			print_debug("Commit is not in specified time window: %s\n", commit_time_string);
+#endif
+			break;
 		}
+
+		if (first_commit_time == 0) {
+			first_commit_time = commit_time;
+		}
+
 
 		if (max_commits != 0 && num_commits >= max_commits) {
 #ifdef DEBUG
@@ -296,14 +314,9 @@ unsigned long int calculate_code_churn(git_repository *repo, int max_commits, ti
 	print_debug("%s %s - %d commits found\n", debug, id, num_commits);
 #endif
 
-	if (min_time == 0) {
-		// if no minimum time was specified, set to oldest commit found
-		min_time = commit_time;
-	}
-
-	tm = localtime(&min_time);
+	tm = localtime(&first_commit_time);
 	strftime(from_time_string, time_string_length, "%F %H:%M", tm);
-	tm = localtime(&max_time);
+	tm = localtime(&last_commit_time);
 	strftime(to_time_string, time_string_length, "%F %H:%M", tm);
 
 	if (num_commits == 0) {
@@ -352,8 +365,9 @@ int main(int argc, char **argv) {
 	time_t max_time = 0;
 	long interval = 0;
 	int max_commits = 0;
+	int yearly_analysis = 0;
 
-	while ((c = getopt(argc, argv, "hn:f:i:")) != -1) {
+	while ((c = getopt(argc, argv, "hn:f:i:y")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
@@ -384,6 +398,9 @@ int main(int argc, char **argv) {
 #endif
 			// this is actually inaccurate
 			interval = atoi(optarg) * 365 * 24 * 60 * 60;
+			break;
+		case 'y':
+			yearly_analysis = 1;
 			break;
 		default:
 			printf ("?? getopt returned character code 0%o ??\n", c);
@@ -483,9 +500,53 @@ int main(int argc, char **argv) {
 		print_csv_header();
 
 		// run the actual analysis
-		while (min_time < now) {
-			calculate_code_churn(repo, max_commits, min_time, interval);
-			min_time = interval > 0 ? min_time + interval : now;
+		if (yearly_analysis) {
+#ifdef DEBUG
+			print_debug("Run yearly analysis\n");
+#endif
+			int year = 70;
+			struct tm *tm;
+			struct tm from;
+			struct tm to;
+			struct tm tm_now;
+			int time_string_length = strlen("2014-10-23") + 1;
+			char from_time_string[time_string_length];
+			char to_time_string[time_string_length];
+			
+			tm = localtime(&min_time);
+			from = *tm;
+			from.tm_year = year;
+
+			to = *tm;
+
+			tm = localtime(&now);
+			tm_now = *tm;
+
+			while (from.tm_year < tm_now.tm_year) {
+				from.tm_mon = 0;
+				from.tm_mday = 1;
+				from.tm_year = year;
+				to.tm_mon = 11;
+				to.tm_mday = 31;
+				to.tm_year = year;
+#ifdef DEBUG
+				strftime(from_time_string, time_string_length, "%F %H:%M", &from);
+				strftime(to_time_string, time_string_length, "%F %H:%M", &to);
+				print_debug("%s - %s\n", from_time_string, to_time_string);
+#endif
+				calculate_code_churn(repo, max_commits, mktime(&from), mktime(&to));
+				year = year + 1;
+			}
+		} else {
+			while (min_time < now) {
+				max_time = interval > 0 ? min_time + interval : now;
+				calculate_code_churn(repo, max_commits, min_time, max_time);
+				if (interval == 0) {
+					break;
+				} else {
+					min_time = min_time + interval;
+				}
+			}
 		}
 
 		// cleanup
