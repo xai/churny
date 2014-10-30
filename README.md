@@ -10,4 +10,4 @@ Just run make
 
 ### Who do I talk to? ###
 
-Olaf Lessenich <lessenic@fim.uni-passau.de>
+Olaf Lessenich (lessenic@fim.uni-passau.de)
