@@ -71,8 +71,8 @@ static void exit_error(const int err, const char *format, ...) {
 void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
-	printf("  m calculate churn seperately for each month\n");
-	printf("  y calculate churn seperately for each year\n");
+	printf("  m calculate churn separately for each month\n");
+	printf("  y calculate churn separately for each year\n");
 	printf("\n");
 }
 
