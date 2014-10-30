@@ -29,12 +29,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdbool.h>
 #include <git2.h>
 
 typedef int interval;
@@ -77,8 +77,7 @@ void usage(const char *basename) {
 }
 
 void print_csv_header(void) {
-	printf(
-			"Date First;Date Last;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
+	printf("Date First;Date Last;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
 }
 
 int calculate_loc(git_repository *repo, const git_oid *oid) {
@@ -110,10 +109,7 @@ int calculate_loc(git_repository *repo, const git_oid *oid) {
 
 	FILE *fp;
 
-	fp =
-			popen(
-					"find . -type f -not -path './.git/*' -print | xargs cat 2>/dev/null | wc -l",
-					"r");
+	fp = popen("find . -type f -not -path './.git/*' -print | xargs cat 2>/dev/null | wc -l", "r");
 	char prbuf[1024];
 	memset(prbuf, 0, sizeof(prbuf));
 
@@ -215,8 +211,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	strftime(prev_time_string, time_string_length, "%F %H:%M", tm);
 	tm = localtime(&cur_time);
 	strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
-	print_debug(
-			"%s %s - diff(%s, %s) = %d changed lines (Time range: %s - %s, %d day%s)\n",
+	print_debug("%s %s - diff(%s, %s) = %d changed lines (Time range: %s - %s, %d day%s)\n",
 			debug, id, cur_buf, prev_buf, churn, cur_time_string,
 			prev_time_string, time_diff, s);
 #endif
@@ -321,7 +316,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 #ifdef DEBUG
 	strftime(from_time_string, time_string_length, "%F %H:%M", &tm_min_time);
-	print_debug("Analyzing until %s\n", from_time_string);
+	print_debug("%s %s - Analyzing until %s\n", debug, id, from_time_string);
 #endif
 
 	git_reference_name_to_id(&head, repo, "HEAD");
@@ -344,7 +339,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 		char commit_time_string[time_string_length];
 		tm = localtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-		print_debug("Commit found: %s\n", commit_time_string);
+		print_debug("%s %s - Commit found: %s\n", debug, id, commit_time_string);
 #endif
 
 		num_commits = num_commits + 1;
@@ -358,20 +353,14 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 		/* if the commit is not in the time interval, calculate churn and continue */
 		if (commit_time < min_time) {
 #ifdef DEBUG
-			print_debug("Commit is not in specified time window: %s\n",
-					commit_time_string);
+			print_debug("%s %s - Commit is not in specified time window: %s\n",
+				    debug, id, commit_time_string);
 #endif
 			/* print results, reset counters and continue */
 			print_results(repo, &first_commit, &last_commit, num_commits,
 				      changed_lines, false);
 
 			/* reset counters */
-			/*last_commit = prev_oid;
-			  git_commit *prev_commit;
-			  git_commit_lookup(&prev_commit, repo, &prev_oid);
-			  last_commit_time = git_commit_time(prev_commit);
-			  git_commit_free(prev_commit);
-			*/
 			if (num_commits > 1) {
 				last_commit = cur_oid;
 				last_commit_time = commit_time;
@@ -396,7 +385,8 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 #ifdef DEBUG
 			strftime(from_time_string, time_string_length, "%F %H:%M",
 				 &tm_min_time);
-			print_debug("Analyzing until %s\n", from_time_string);
+			print_debug("%s %s - Analyzing until %s\n", debug, id,
+				    from_time_string);
 #endif
 		}
 
@@ -416,7 +406,8 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 		s[0] = 's';
 	}
 	print_debug("%s %s - %d commits found\n", debug, id, num_commits);
-	print_debug("%lu total lines of changed code\n", total_changed_lines);
+	print_debug("%%s %s - lu total lines of changed code\n", debug, id,
+		    total_changed_lines);
 #endif
 
 	/* cleanup */
@@ -469,7 +460,7 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 		char commit_time_string[time_string_length];
 		tm = localtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-		print_debug("Commit found: %s\n", commit_time_string);
+		print_debug("%s %s - Commit found: %s\n", debug, id, commit_time_string);
 #endif
 
 		first_commit_time = commit_time;
@@ -495,33 +486,14 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 	print_debug("%s %s - %d commits found\n", debug, id, num_commits);
 #endif
 
-	tm = localtime(&first_commit_time);
-	strftime(from_time_string, time_string_length, "%F %H:%M", tm);
-	tm = localtime(&last_commit_time);
-	strftime(to_time_string, time_string_length, "%F %H:%M", tm);
-
-	if (num_commits == 0) {
-		return 0;
-	}
-
-	/* count lines of code */
-	int first_loc = calculate_loc(repo, &first_commit);
-	int last_loc = calculate_loc(repo, &last_commit);
-	double ratio = (double) first_loc / (double) last_loc;
-
-	/* compute relative code churn */
-	double churn = last_loc;
-	churn = (double) total_changed_lines / (double) last_loc;
-
 	/* print results */
-	printf("%s;%s;%d;%d;%d;%.2f;%lu;%.2f;\n", from_time_string, to_time_string,
-			num_commits, first_loc, last_loc, ratio, total_changed_lines,
-			churn);
+	print_results(repo, &first_commit, &last_commit, num_commits,
+		      total_changed_lines, false);
 
 	/* cleanup */
 	git_revwalk_free(walk);
 
-	return churn;
+	return total_changed_lines;
 }
 
 int main(int argc, char **argv) {
@@ -592,41 +564,35 @@ int main(int argc, char **argv) {
 #endif
 
 			/* make sure that there is a .git directory in there */
-			char *gitmetadir;
-			if ((gitmetadir = malloc(strlen(path) + 6)) != NULL) {
-				strcat(gitmetadir, path);
-				strcat(gitmetadir, "/.git");
-				err = stat(gitmetadir, &s);
-				if (err != -1 && S_ISDIR(s.st_mode)) {
-					/* seems to be a git repository */
-					free(gitmetadir);
-
+			char gitmetadir[strlen(path) + 6];
+			strcpy(gitmetadir, path);
+			strcat(gitmetadir, "/.git");
+			err = stat(gitmetadir, &s);
+			if (err != -1 && S_ISDIR(s.st_mode)) {
+				/* seems to be a git repository */
 #ifdef DEBUG
-					print_debug("%s %s - Is a git repository: %s\n", debug, id,
-							path);
+				print_debug("%s %s - Is a git repository: %s\n", debug, id,
+					    path);
 #endif
 
-					/* initialize repo */
-					git_threads_init();
-					if (git_repository_open(&repo, path) == 0) {
+				/* initialize repo */
+				git_threads_init();
+				if (git_repository_open(&repo, path) == 0) {
 
 #ifdef DEBUG
-						print_debug("%s %s - Initialized repository: %s\n",
-								debug, id, path);
+					print_debug("%s %s - Initialized repository: %s\n",
+						    debug, id, path);
 #endif
 
-					} else {
-						exit_error(EXIT_FAILURE,
-								"%s %s - Could not open repository: %s\n",
-								fatal, id, path);
-					}
 				} else {
 					exit_error(EXIT_FAILURE,
-							"%s %s - Is not a git repository: %s\n", fatal, id,
-							path);
+						   "%s %s - Could not open repository: %s\n",
+						   fatal, id, path);
 				}
 			} else {
-				exit_error(EXIT_FAILURE, "%s %s - malloc failed!\n", fatal, id);
+				exit_error(EXIT_FAILURE,
+					   "%s %s - Is not a git repository: %s\n", fatal, id,
+					   path);
 			}
 		} else if (err == -1) {
 			perror("stat");
@@ -639,7 +605,7 @@ int main(int argc, char **argv) {
 	case 2:
 		/* either two tars or two directories are expected */
 #ifdef DEBUG
-		print_debug("Expecting two tars or two directories\n");
+		print_debug("%s %s - Expecting two tars or two directories\n", debug, id);
 #endif
 		break;
 	default:
