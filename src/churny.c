@@ -68,7 +68,7 @@ static void exit_error(const int err, const char *format, ...) {
 	exit(err);
 }
 
-void usage(const char *basename) {
+static void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
 	printf("  m calculate churn separately for each month\n");
@@ -76,8 +76,8 @@ void usage(const char *basename) {
 	printf("\n");
 }
 
-void print_csv_header(void) {
-	printf("Date First;Date Last;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
+static void print_csv_header(void) {
+	printf("Date First;Date Last;First Id; Last Id;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
 }
 
 int calculate_loc(git_repository *repo, const git_oid *oid) {
@@ -230,6 +230,12 @@ void print_results(git_repository * repo, const git_oid *first,
 		int time_string_length = strlen("2014-10-23") + 1;
 		char first_time_string[time_string_length];
 		char last_time_string[time_string_length];
+		char first_buf[GIT_OID_HEXSZ + 1];
+		char last_buf[GIT_OID_HEXSZ + 1];
+		git_oid_fmt(first_buf, first);
+		first_buf[GIT_OID_HEXSZ] = '\0';
+		git_oid_fmt(last_buf, last);
+		last_buf[GIT_OID_HEXSZ] = '\0';
 		struct tm *tm;
 
 		git_commit_lookup(&first_commit, repo, first);
@@ -252,9 +258,9 @@ void print_results(git_repository * repo, const git_oid *first,
 		churn = (double) changed_lines / (double) last_loc;
 
 		/* print results */
-		printf("%s;%s;%d;%d;%d;%.2f;%lu;%.2f;\n", first_time_string,
-				last_time_string, num_commits, first_loc, last_loc, ratio,
-				changed_lines, churn);
+		printf("%s;%s;%s;%s;%d;%d;%d;%.2f;%lu;%.2f;\n", first_time_string,
+		       last_time_string, first_buf, last_buf,num_commits,
+		       first_loc, last_loc, ratio, changed_lines, churn);
 
 		/* cleanup */
 		git_commit_free(first_commit);
@@ -262,7 +268,7 @@ void print_results(git_repository * repo, const git_oid *first,
 	} else {
 		if (print_zeros) {
 			int i;
-			for (i = 0; i < 8; i++) {
+			for (i = 0; i < 10; i++) {
 				printf("0;");
 			}
 			printf("\n");
