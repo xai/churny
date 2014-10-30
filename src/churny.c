@@ -71,7 +71,6 @@ static void exit_error(const int err, const char *format, ...) {
 void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
-	printf("  n K\tConsider only K commits\n");
 	printf("  m calculate churn seperately for each month\n");
 	printf("  y calculate churn seperately for each year\n");
 	printf("\n");
@@ -271,6 +270,7 @@ void print_results(git_repository * repo, const git_oid *first,
 			for (i = 0; i < 8; i++) {
 				printf("0;");
 			}
+			printf("\n");
 		}
 	}
 }
@@ -306,9 +306,11 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	tm = localtime(&min_time);
 	tm_min_time = *tm;
 
-	if (interval == YEAR) {
+	switch (interval) {
+	case YEAR:
 		tm_min_time.tm_mon = 0;
-		tm_min_time.tm_mday = 1;
+	case MONTH:
+		tm_min_time.tm_mday = 1;	
 	}
 
 	min_time = mktime(&tm_min_time);
@@ -349,23 +351,31 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 #endif
 			/* print results, reset counters and continue */
 			print_results(repo, &first_commit, &last_commit, num_commits,
-				      changed_lines, true);
+				      changed_lines, false);
 
 			/* reset counters */
-			num_commits = 1;
+			num_commits = 0;
 			last_commit_time = commit_time;
 			last_commit = cur_oid;
 			changed_lines = 0;
 
-			if (interval == YEAR) {
+			switch (interval) {
+			case MONTH:
+				tm_min_time.tm_mon = tm_min_time.tm_mon - 1;
+				if (tm_min_time.tm_mon < 0) {
+					tm_min_time.tm_mon = 0;
+				} else {
+					break;
+				}
+			case YEAR:
 				tm_min_time.tm_year = tm_min_time.tm_year - 1;
-				min_time = mktime(&tm_min_time);
-#ifdef DEBUG
-				strftime(from_time_string, time_string_length, "%F %H:%M",
-						&tm_min_time);
-				print_debug("Analyzing until %s\n", from_time_string);
-#endif
 			}
+			min_time = mktime(&tm_min_time);
+#ifdef DEBUG
+			strftime(from_time_string, time_string_length, "%F %H:%M",
+				 &tm_min_time);
+			print_debug("Analyzing until %s\n", from_time_string);
+#endif
 
 		}
 
@@ -385,7 +395,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	}
 
 	print_results(repo, &first_commit, &last_commit, num_commits,
-		      changed_lines, true);
+		      changed_lines, false);
 
 	git_commit_free(commit);
 
@@ -521,15 +531,19 @@ int main(int argc, char **argv) {
 
 	/* parse arguments */
 	int c;
-	int yearly_analysis = 0;
+	interval interval = 0;
+	
 
-	while ((c = getopt(argc, argv, "hy")) != -1) {
+	while ((c = getopt(argc, argv, "hmy")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
 			return EXIT_SUCCESS;
+		case 'm':
+			interval = MONTH;
+			break;
 		case 'y':
-			yearly_analysis = 1;
+			interval = YEAR;
 			break;
 		default:
 			printf("?? getopt returned character code 0%o ??\n", c);
@@ -628,11 +642,8 @@ int main(int argc, char **argv) {
 		print_csv_header();
 
 		/* run the actual analysis */
-		if (yearly_analysis) {
-#ifdef DEBUG
-			print_debug("Run yearly analysis\n");
-#endif
-			calculate_interval_code_churn(repo, YEAR);
+		if (interval > 0) {
+			calculate_interval_code_churn(repo, interval);
 		} else {
 			calculate_code_churn(repo);
 		}
