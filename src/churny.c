@@ -227,7 +227,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 void print_results(git_repository * repo, const git_oid *first,
 		const git_oid *last, int num_commits, unsigned long int changed_lines,
 		const bool print_zeros) {
-	if (num_commits > 0) {
+	if (num_commits > 1) {
 		git_commit *first_commit;
 		git_commit *last_commit;
 		time_t first_commit_time;
@@ -343,6 +343,14 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 		print_debug("Commit found: %s\n", commit_time_string);
 #endif
 
+		num_commits = num_commits + 1;
+				
+		if (num_commits >= 2) {
+			int diff = calculate_diff(repo, &prev_oid, &cur_oid);
+			changed_lines = changed_lines + diff;
+			total_changed_lines = total_changed_lines + diff;
+		}
+
 		/* if the commit is not in the time interval, calculate churn and continue */
 		if (commit_time < min_time) {
 #ifdef DEBUG
@@ -354,43 +362,42 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 				      changed_lines, false);
 
 			/* reset counters */
-			num_commits = 0;
-			last_commit_time = commit_time;
-			last_commit = cur_oid;
-			changed_lines = 0;
-
-			switch (interval) {
-			case MONTH:
-				tm_min_time.tm_mon = tm_min_time.tm_mon - 1;
-				if (tm_min_time.tm_mon < 0) {
-					tm_min_time.tm_mon = 0;
-				} else {
-					break;
-				}
-			case YEAR:
-				tm_min_time.tm_year = tm_min_time.tm_year - 1;
+			/*last_commit = prev_oid;
+			  git_commit *prev_commit;
+			  git_commit_lookup(&prev_commit, repo, &prev_oid);
+			  last_commit_time = git_commit_time(prev_commit);
+			  git_commit_free(prev_commit);
+			*/
+			if (num_commits > 1) {
+				last_commit = cur_oid;
+				last_commit_time = commit_time;
+				changed_lines = 0;
+				num_commits = 1;
 			}
-			min_time = mktime(&tm_min_time);
+
+			while (commit_time < min_time) {
+				switch (interval) {
+				case MONTH:
+					tm_min_time.tm_mon = tm_min_time.tm_mon - 1;
+					if (tm_min_time.tm_mon < 0) {
+						tm_min_time.tm_mon = 11;
+					} else {
+						break;
+					}
+				case YEAR:
+					tm_min_time.tm_year = tm_min_time.tm_year - 1;
+				}
+				min_time = mktime(&tm_min_time);
+			}
 #ifdef DEBUG
 			strftime(from_time_string, time_string_length, "%F %H:%M",
 				 &tm_min_time);
 			print_debug("Analyzing until %s\n", from_time_string);
 #endif
-
 		}
 
 		first_commit_time = commit_time;
 		first_commit = cur_oid;
-
-		num_commits = num_commits + 1;
-
-		if (num_commits > 2) {
-			int diff = calculate_diff(repo, &prev_oid, &cur_oid);
-			changed_lines = changed_lines + diff;
-			total_changed_lines = total_changed_lines + diff;
-
-		}
-
 		prev_oid = cur_oid;
 	}
 
@@ -466,7 +473,7 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 
 		num_commits = num_commits + 1;
 
-		if (num_commits > 2) {
+		if (num_commits >= 2) {
 			total_changed_lines = total_changed_lines
 					+ calculate_diff(repo, &prev_oid, &cur_oid);
 		}
