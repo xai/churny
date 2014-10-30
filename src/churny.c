@@ -81,7 +81,7 @@ static void print_csv_header(void) {
 	printf("Date First;Date Last;First Id; Last Id;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
 }
 
-int calculate_loc(git_repository *repo, const git_oid *oid) {
+int calculate_loc(git_repository *repo, const git_oid *oid, const char *extension) {
 	const char id[] = "calculate_loc";
 
 	int loc = 0;
@@ -108,9 +108,20 @@ int calculate_loc(git_repository *repo, const git_oid *oid) {
 		git_checkout_head(repo, &opts);
 	}
 
-	FILE *fp;
+	char find_name[] = "-name \\*";
+	char find_options[strlen(extension) + strlen(find_name) + 1];
+	if (strlen(extension) > 0) {
+		strcpy(find_options, find_name);
+		strcat(find_options, extension);
+	} else {
+		strcpy(find_options, "");
+	}
 
-	fp = popen("find . -type f -not -path './.git/*' -print | xargs cat 2>/dev/null | wc -l", "r");
+	char cmd[104 + strlen(find_options)];
+	sprintf(cmd, "find . -type f %s -not -path './.git/*' -print | xargs cat 2>/dev/null | egrep -v '^[[:space:]]*$' | wc -l", find_options);
+
+	FILE *fp;
+	fp = popen(cmd, "r");
 	char prbuf[1024];
 	memset(prbuf, 0, sizeof(prbuf));
 
@@ -191,6 +202,10 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	
 	if (strlen(extension) > 0) {
 		// look at each line and add changes if extension type matches
+		if (b.ptr == NULL) {
+			return 0;
+		}
+
 		char *line = strtok(strdup(b.ptr), "\n");
 		unsigned int cur_insertions = 0;
 		unsigned int cur_deletions = 0;
@@ -249,8 +264,8 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 }
 
 void print_results(git_repository * repo, const git_oid *first,
-		const git_oid *last, int num_commits, unsigned long int changed_lines,
-		const bool print_zeros) {
+		const git_oid *last, int num_commits, unsigned long int changed_lines, 
+		   const bool print_zeros, const char *extension) {
 	if (num_commits > 1) {
 		git_commit *first_commit;
 		git_commit *last_commit;
@@ -278,8 +293,8 @@ void print_results(git_repository * repo, const git_oid *first,
 		strftime(last_time_string, time_string_length, "%F %H:%M", tm);
 
 		/* count lines of code */
-		int first_loc = calculate_loc(repo, first);
-		int last_loc = calculate_loc(repo, last);
+		int first_loc = calculate_loc(repo, first, extension);
+		int last_loc = calculate_loc(repo, last, extension);
 		double ratio = (double) first_loc / (double) last_loc;
 
 		/* compute relative code churn */
@@ -393,7 +408,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 #endif
 			/* print results, reset counters and continue */
 			print_results(repo, &first_commit, &last_commit, num_commits,
-				      changed_lines, false);
+				      changed_lines, false, extension);
 
 			/* reset counters */
 			if (num_commits > 1) {
@@ -431,7 +446,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	}
 
 	print_results(repo, &first_commit, &last_commit, num_commits,
-		      changed_lines, false);
+		      changed_lines, false, extension);
 
 	git_commit_free(commit);
 
@@ -523,7 +538,7 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 
 	/* print results */
 	print_results(repo, &first_commit, &last_commit, num_commits,
-	  total_changed_lines, false);
+		      total_changed_lines, false, extension);
 
 	/* cleanup */
 	git_revwalk_free(walk);
