@@ -43,9 +43,10 @@ typedef int interval;
 
 static const char fatal[] = "[FATAL]";
 static const char debug[] = "[DEBUG]";
+static const char trace[] = "[TRACE]";
 
 static void print_debug(const char *format, ...) {
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	va_list args;
 	va_start(args, format);
 	vprintf(format, args);
@@ -143,7 +144,7 @@ int calculate_loc(git_repository *repo, const git_oid *oid) {
 }
 
 int calculate_diff(git_repository *repo, const git_oid *prev,
-		const git_oid *cur) {
+		   const git_oid *cur, const char *extension) {
 	const char id[] = "calculate_diff";
 
 #ifdef DEBUG
@@ -185,8 +186,32 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	fputs(b.ptr, stdout);
 #endif
 
-	int insertions = git_diff_stats_insertions(stats);
-	int deletions = git_diff_stats_deletions(stats);
+	int insertions = 0;
+	int deletions = 0;
+	
+	if (strlen(extension) > 0) {
+		// look at each line and add changes if extension type matches
+		char *line = strtok(strdup(b.ptr), "\n");
+		unsigned int cur_insertions = 0;
+		unsigned int cur_deletions = 0;
+		int ret;
+		char path[4096];
+		
+		while(line) {
+			ret = sscanf(line, "%8u%8u%s", &cur_insertions, &cur_deletions, path);
+			line  = strtok(NULL, "\n");
+			if (ret == 3 && strlen(path) > strlen(extension) && !strcmp(path + strlen(path) - strlen(extension), extension)) {
+#ifdef TRACE
+				printf("%u insertions, %u deletions, path: %s\n", cur_insertions, cur_deletions, path);
+#endif
+				insertions = insertions + cur_insertions;
+				deletions = deletions + cur_deletions;
+			}
+		}
+	}  else {
+		insertions = git_diff_stats_insertions(stats);
+		deletions = git_diff_stats_deletions(stats);
+	}
 
 	/* cleanup */
 	git_buf_free(&b);
@@ -196,7 +221,11 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	git_tree_free(cur_tree);
 	git_commit_free(commit);
 
-	int churn = insertions + deletions;
+	int lines = insertions + deletions;
+	
+#ifdef TRACE
+	print_debug("%s %s - %d insertions + %d deletions = %d changed lines\n", trace, id, insertions, deletions, lines);
+#endif
 
 #ifdef DEBUG
 	int time_diff = (prev_time - cur_time) / (60 * 60 * 24);
@@ -212,11 +241,11 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	tm = localtime(&cur_time);
 	strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
 	print_debug("%s %s - diff(%s, %s) = %d changed lines (Time range: %s - %s, %d day%s)\n",
-			debug, id, cur_buf, prev_buf, churn, cur_time_string,
+			debug, id, cur_buf, prev_buf, lines, cur_time_string,
 			prev_time_string, time_diff, s);
 #endif
 
-	return churn;
+	return lines;
 }
 
 void print_results(git_repository * repo, const git_oid *first,
@@ -277,7 +306,7 @@ void print_results(git_repository * repo, const git_oid *first,
 }
 
 unsigned long int calculate_interval_code_churn(git_repository *repo,
-		const interval interval) {
+						const interval interval, const char *extension) {
 	const char id[] = "calculate_interval_code_churn";
 #ifdef DEBUG
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -351,7 +380,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 		num_commits = num_commits + 1;
 				
 		if (num_commits >= 2) {
-			int diff = calculate_diff(repo, &prev_oid, &cur_oid);
+	int diff = calculate_diff(repo, &prev_oid, &cur_oid, extension);
 			changed_lines = changed_lines + diff;
 			total_changed_lines = total_changed_lines + diff;
 		}
@@ -422,7 +451,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	return total_changed_lines;
 }
 
-unsigned long int calculate_code_churn(git_repository *repo) {
+unsigned long int calculate_code_churn(git_repository *repo, const char *extension) {
 	const char id[] = "calculate_code_churn";
 #ifdef DEBUG
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -476,7 +505,7 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 
 		if (num_commits >= 2) {
 			total_changed_lines = total_changed_lines
-					+ calculate_diff(repo, &prev_oid, &cur_oid);
+				+ calculate_diff(repo, &prev_oid, &cur_oid, extension);
 		}
 
 		prev_oid = cur_oid;
@@ -494,7 +523,7 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 
 	/* print results */
 	print_results(repo, &first_commit, &last_commit, num_commits,
-		      total_changed_lines, false);
+	  total_changed_lines, false);
 
 	/* cleanup */
 	git_revwalk_free(walk);
@@ -521,13 +550,17 @@ int main(int argc, char **argv) {
 	/* parse arguments */
 	int c;
 	interval interval = 0;
+	char extension[255] = "";
 	
 
-	while ((c = getopt(argc, argv, "hmy")) != -1) {
+	while ((c = getopt(argc, argv, "hl:my")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
 			return EXIT_SUCCESS;
+		case 'l':
+			strcpy(extension, optarg);
+			break;
 		case 'm':
 			interval = MONTH;
 			break;
@@ -626,9 +659,9 @@ int main(int argc, char **argv) {
 
 		/* run the actual analysis */
 		if (interval > 0) {
-			calculate_interval_code_churn(repo, interval);
+			calculate_interval_code_churn(repo, interval, extension);
 		} else {
-			calculate_code_churn(repo);
+			calculate_code_churn(repo, extension);
 		}
 
 		/* cleanup */
