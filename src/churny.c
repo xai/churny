@@ -293,7 +293,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	git_oid first_commit;
 	git_oid last_commit;
 	time_t last_commit_time = 0;
-	int time_string_length = strlen("2014-10-23") + 1;
+	int time_string_length = strlen("2014-10-23 00:00") + 1;
 	int num_commits = 0;
 	unsigned long int total_changed_lines = 0;
 	unsigned long int changed_lines = 0;
@@ -312,6 +312,10 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	case MONTH:
 		tm_min_time.tm_mday = 1;	
 	}
+
+	tm_min_time.tm_sec = 0;
+	tm_min_time.tm_min = 0;
+	tm_min_time.tm_hour = 0;
 
 	min_time = mktime(&tm_min_time);
 
@@ -438,7 +442,7 @@ unsigned long int calculate_code_churn(git_repository *repo) {
 	git_oid first_commit;
 	git_oid last_commit;
 	time_t last_commit_time = 0;
-	int time_string_length = strlen("2014-10-23") + 1;
+	int time_string_length = strlen("2014-10-23 00:00") + 1;
 	int num_commits = 0;
 	unsigned long int total_changed_lines = 0;
 	struct tm *tm;
