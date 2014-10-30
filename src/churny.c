@@ -94,7 +94,7 @@ int calculate_loc(git_repository *repo, const git_oid *oid, const char *extensio
 	if (oid != NULL) {
 		chdir(git_repository_workdir(repo));
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 		char buf[GIT_OID_HEXSZ + 1];
 		git_oid_fmt(buf, oid);
 		buf[GIT_OID_HEXSZ] = '\0';
@@ -147,7 +147,7 @@ int calculate_loc(git_repository *repo, const git_oid *oid, const char *extensio
 		git_checkout_head(repo, &opts);
 	}
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	print_debug("%d\n", loc);
 #endif
 
@@ -158,7 +158,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 		   const git_oid *cur, const char *extension) {
 	const char id[] = "calculate_diff";
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	char prev_buf[GIT_OID_HEXSZ + 1];
 	char cur_buf[GIT_OID_HEXSZ + 1];
 	git_oid_fmt(prev_buf, prev);
@@ -194,7 +194,9 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	git_diff_stats_to_buf(&b, stats, format, 80);
 
 #ifdef TRACE
-	fputs(b.ptr, stdout);
+	if (b.ptr != NULL) {
+		fputs(b.ptr, stdout);
+	}
 #endif
 
 	int insertions = 0;
@@ -242,7 +244,7 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	print_debug("%s %s - %d insertions + %d deletions = %d changed lines\n", trace, id, insertions, deletions, lines);
 #endif
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	int time_diff = (prev_time - cur_time) / (60 * 60 * 24);
 	char s[2] = "";
 	if (time_diff != 1)
@@ -323,7 +325,7 @@ void print_results(git_repository * repo, const git_oid *first,
 unsigned long int calculate_interval_code_churn(git_repository *repo,
 						const interval interval, const char *extension) {
 	const char id[] = "calculate_interval_code_churn";
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
 #endif
 
@@ -364,7 +366,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 	min_time = mktime(&tm_min_time);
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	strftime(from_time_string, time_string_length, "%F %H:%M", &tm_min_time);
 	print_debug("%s %s - Analyzing until %s\n", debug, id, from_time_string);
 #endif
@@ -385,7 +387,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 			last_commit = cur_oid;
 		}
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 		char commit_time_string[time_string_length];
 		tm = localtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
@@ -402,7 +404,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 		/* if the commit is not in the time interval, calculate churn and continue */
 		if (commit_time < min_time) {
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 			print_debug("%s %s - Commit is not in specified time window: %s\n",
 				    debug, id, commit_time_string);
 #endif
@@ -432,7 +434,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 				}
 				min_time = mktime(&tm_min_time);
 			}
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 			strftime(from_time_string, time_string_length, "%F %H:%M",
 				 &tm_min_time);
 			print_debug("%s %s - Analyzing until %s\n", debug, id,
@@ -450,7 +452,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 	git_commit_free(commit);
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	char s[2] = "";
 	if (num_commits != 1) {
 		s[0] = 's';
@@ -468,7 +470,7 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 unsigned long int calculate_code_churn(git_repository *repo, const char *extension) {
 	const char id[] = "calculate_code_churn";
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
 #endif
 
@@ -506,7 +508,7 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 			last_commit = cur_oid;
 		}
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 		char commit_time_string[time_string_length];
 		tm = localtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
@@ -528,7 +530,7 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 
 	git_commit_free(commit);
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	char s[2] = "";
 	if (num_commits != 1) {
 		s[0] = 's';
@@ -549,7 +551,7 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 int main(int argc, char **argv) {
 	const char id[] = "main";
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	/* print program call */
 	print_debug("%s %s - program call ", debug, id);
 	int i;
@@ -590,7 +592,7 @@ int main(int argc, char **argv) {
 	char *path = NULL;
 	git_repository *repo = NULL;
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 	print_debug("argc = %d\noptind = %d\n", argc, optind);
 #endif
 
@@ -605,7 +607,7 @@ int main(int argc, char **argv) {
 		/* a git repository is expected */
 		path = argv[optind];
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 		print_debug("%s %s - path = \"%s\"\n", debug, id, path);
 #endif
 		/* make sure path exists and is a directory */
@@ -613,7 +615,7 @@ int main(int argc, char **argv) {
 		int err = stat(path, &s);
 		if (err != -1 && S_ISDIR(s.st_mode)) {
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 			print_debug("%s %s - Directory exists: %s\n", debug, id, path);
 #endif
 
@@ -624,7 +626,7 @@ int main(int argc, char **argv) {
 			err = stat(gitmetadir, &s);
 			if (err != -1 && S_ISDIR(s.st_mode)) {
 				/* seems to be a git repository */
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 				print_debug("%s %s - Is a git repository: %s\n", debug, id,
 					    path);
 #endif
@@ -633,7 +635,7 @@ int main(int argc, char **argv) {
 				git_threads_init();
 				if (git_repository_open(&repo, path) == 0) {
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 					print_debug("%s %s - Initialized repository: %s\n",
 						    debug, id, path);
 #endif
@@ -658,7 +660,7 @@ int main(int argc, char **argv) {
 		break;
 	case 2:
 		/* either two tars or two directories are expected */
-#ifdef DEBUG
+#if defined(DEBUG) || defined(TRACE)
 		print_debug("%s %s - Expecting two tars or two directories\n", debug, id);
 #endif
 		break;
