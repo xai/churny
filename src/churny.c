@@ -16,7 +16,6 @@
  * Boston, MA 021110-1307, USA.
  *
  * TODO: Features
- * - filter file extensions (via regex and presets)
  * - on-demand checkout from a server
  * - take 2 directories as input
  * - take 2 tars as input
@@ -37,37 +36,12 @@
 #include <stdbool.h>
 #include <git2.h>
 
+#include "utils.h"
+#include "loc.h"
+
 typedef int interval;
 #define YEAR 1
 #define MONTH 2
-
-static const char fatal[] = "[FATAL]";
-static const char debug[] = "[DEBUG]";
-static const char trace[] = "[TRACE]";
-
-static void print_debug(const char *format, ...) {
-#if defined(DEBUG) || defined(TRACE)
-	va_list args;
-	va_start(args, format);
-	vprintf(format, args);
-	va_end(args);
-#endif
-}
-
-static void print_error(const char *format, ...) {
-	va_list args;
-	va_start(args, format);
-	vfprintf(stderr, format, args);
-	va_end(args);
-}
-
-static void exit_error(const int err, const char *format, ...) {
-	va_list args;
-	va_start(args, format);
-	print_error(format, args);
-	va_end(args);
-	exit(err);
-}
 
 static void usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
@@ -77,84 +51,11 @@ static void usage(const char *basename) {
 	printf("\n");
 }
 
-static void print_csv_header(void) {
-	printf("Date First;Date Last;First Id; Last Id;Commits;First LoC;Last LoC;Ratio;Changed LoC;Relative Code Churn;\n");
+static void print_csv_header() {
+	printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;Base LoC;Last LoC;Ratio;Added LoC;Removed LoC;Changed LoC;Relative Code Churn");
 }
 
-int calculate_loc(git_repository *repo, const git_oid *oid, const char *extension) {
-	const char id[] = "calculate_loc";
-
-	int loc = 0;
-	git_commit *commit;
-	git_object *gobject;
-
-	git_checkout_options opts = GIT_CHECKOUT_OPTIONS_INIT;
-	opts.checkout_strategy = GIT_CHECKOUT_FORCE;
-
-	if (oid != NULL) {
-		chdir(git_repository_workdir(repo));
-
-#if defined(DEBUG) || defined(TRACE)
-		char buf[GIT_OID_HEXSZ + 1];
-		git_oid_fmt(buf, oid);
-		buf[GIT_OID_HEXSZ] = '\0';
-		print_debug("%s %s - counting lines of commit %s: ", debug, id, buf);
-#endif
-
-		git_commit_lookup(&commit, repo, oid);
-		git_object_lookup(&gobject, repo, oid, GIT_OBJ_COMMIT);
-		git_checkout_tree(repo, gobject, &opts);
-	} else {
-		git_checkout_head(repo, &opts);
-	}
-
-	char find_name[] = "-name \\*";
-	char find_options[strlen(extension) + strlen(find_name) + 1];
-	if (strlen(extension) > 0) {
-		strcpy(find_options, find_name);
-		strcat(find_options, extension);
-	} else {
-		strcpy(find_options, "");
-	}
-
-	char cmd[104 + strlen(find_options)];
-	sprintf(cmd, "find . -type f %s -not -path './.git/*' -print | xargs cat 2>/dev/null | egrep -v '^[[:space:]]*$' | wc -l", find_options);
-
-	FILE *fp;
-	fp = popen(cmd, "r");
-	char prbuf[1024];
-	memset(prbuf, 0, sizeof(prbuf));
-
-	if (fp == NULL) {
-		git_checkout_head(repo, NULL);
-		perror("popen");
-		exit(EXIT_FAILURE);
-	}
-
-	if (fgets(prbuf, sizeof(prbuf) - 1, fp) != NULL) {
-		loc = atoi(prbuf);
-	} else {
-		exit_error(EXIT_FAILURE, "%s %s - Error while counting lines of code\n",
-				fatal, id);
-	}
-
-	pclose(fp);
-	git_object_free(gobject);
-	git_commit_free(commit);
-
-	if (oid != NULL) {
-		/* checkout HEAD again */
-		git_checkout_head(repo, &opts);
-	}
-
-#if defined(DEBUG) || defined(TRACE)
-	print_debug("%d\n", loc);
-#endif
-
-	return loc;
-}
-
-int calculate_diff(git_repository *repo, const git_oid *prev,
+diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 		   const git_oid *cur, const char *extension) {
 	const char id[] = "calculate_diff";
 
@@ -171,9 +72,13 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	git_tree *prev_tree;
 	git_tree *cur_tree;
 	git_diff *diff;
-	time_t prev_time;
-	time_t cur_time;
+	git_time_t prev_time;
+	git_time_t cur_time;
 	struct tm *tm;
+	diffresult result;
+	result.insertions = 0;
+	result.deletions = 0;
+	result.changes = 0;
 
 	git_commit_lookup(&commit, repo, prev);
 	prev_time = git_commit_time(commit);
@@ -198,36 +103,33 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 		fputs(b.ptr, stdout);
 	}
 #endif
-
-	int insertions = 0;
-	int deletions = 0;
 	
 	if (strlen(extension) > 0) {
 		// look at each line and add changes if extension type matches
 		if (b.ptr == NULL) {
-			return 0;
+			return result;
 		}
 
 		char *line = strtok(strdup(b.ptr), "\n");
-		unsigned int cur_insertions = 0;
-		unsigned int cur_deletions = 0;
+		unsigned long int cur_insertions = 0;
+		unsigned long int cur_deletions = 0;
 		int ret;
 		char path[4096];
 		
 		while(line) {
-			ret = sscanf(line, "%8u%8u%s", &cur_insertions, &cur_deletions, path);
+			ret = sscanf(line, "%8lu%8lu%s", &cur_insertions, &cur_deletions, path);
 			line  = strtok(NULL, "\n");
 			if (ret == 3 && strlen(path) > strlen(extension) && !strcmp(path + strlen(path) - strlen(extension), extension)) {
 #ifdef TRACE
-				printf("%u insertions, %u deletions, path: %s\n", cur_insertions, cur_deletions, path);
+				printf("%lu insertions, %lu deletions, path: %s\n", cur_insertions, cur_deletions, path);
 #endif
-				insertions = insertions + cur_insertions;
-				deletions = deletions + cur_deletions;
+				result.insertions = result.insertions + cur_insertions;
+				result.deletions = result.deletions + cur_deletions;
 			}
 		}
 	}  else {
-		insertions = git_diff_stats_insertions(stats);
-		deletions = git_diff_stats_deletions(stats);
+		result.insertions = git_diff_stats_insertions(stats);
+		result.deletions = git_diff_stats_deletions(stats);
 	}
 
 	/* cleanup */
@@ -238,10 +140,10 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	git_tree_free(cur_tree);
 	git_commit_free(commit);
 
-	int lines = insertions + deletions;
+	result.changes = result.insertions + result.deletions;
 	
 #ifdef TRACE
-	print_debug("%s %s - %d insertions + %d deletions = %d changed lines\n", trace, id, insertions, deletions, lines);
+	print_debug("%s %s - %d insertions + %d deletions = %d changed lines\n", trace, id, result.insertions, result.deletions, result.changes);
 #endif
 
 #if defined(DEBUG) || defined(TRACE)
@@ -255,24 +157,24 @@ int calculate_diff(git_repository *repo, const git_oid *prev,
 	char cur_time_string[time_string_length];
 	tm = localtime(&prev_time);
 	strftime(prev_time_string, time_string_length, "%F %H:%M", tm);
-	tm = localtime(&cur_time);
+	tm = gmtime(&cur_time);
 	strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
 	print_debug("%s %s - diff(%s, %s) = %d changed lines (Time range: %s - %s, %d day%s)\n",
-			debug, id, cur_buf, prev_buf, lines, cur_time_string,
+		    debug, id, cur_buf, prev_buf, result.changes, cur_time_string,
 			prev_time_string, time_diff, s);
 #endif
 
-	return lines;
+	return result;
 }
 
-void print_results(git_repository * repo, const git_oid *first,
-		const git_oid *last, int num_commits, unsigned long int changed_lines, 
+void print_results(git_repository *repo, const git_oid *first,
+		const git_oid *last, const int num_commits, const diffresult diff, 
 		   const bool print_zeros, const char *extension) {
-	if (num_commits > 1) {
+	if (num_commits > 1 || print_zeros) {
 		git_commit *first_commit;
 		git_commit *last_commit;
-		time_t first_commit_time;
-		time_t last_commit_time;
+		git_time_t first_commit_time;
+		git_time_t last_commit_time;
 		int time_string_length = strlen("2014-10-23") + 1;
 		char first_time_string[time_string_length];
 		char last_time_string[time_string_length];
@@ -289,41 +191,38 @@ void print_results(git_repository * repo, const git_oid *first,
 		first_commit_time = git_commit_time(first_commit);
 		last_commit_time = git_commit_time(last_commit);
 
-		tm = localtime(&first_commit_time);
+		tm = gmtime(&first_commit_time);
 		strftime(first_time_string, time_string_length, "%F %H:%M", tm);
-		tm = localtime(&last_commit_time);
+		tm = gmtime(&last_commit_time);
 		strftime(last_time_string, time_string_length, "%F %H:%M", tm);
 
 		/* count lines of code */
 		int first_loc = calculate_loc(repo, first, extension);
 		int last_loc = calculate_loc(repo, last, extension);
-		double ratio = (double) first_loc / (double) last_loc;
+		double ratio = first_loc == 0 ? last_loc == 0 ? 0.0 : 1.0 : (double) last_loc / (double) first_loc;
 
 		/* compute relative code churn */
 		double churn = last_loc;
-		churn = (double) changed_lines / (double) last_loc;
+		churn = last_loc == 0 ? 0 : (double) diff.changes / (double) last_loc;
 
 		/* print results */
-		printf("%s;%s;%s;%s;%d;%d;%d;%.2f;%lu;%.2f;\n", first_time_string,
+		char results[1024 + 1];
+		sprintf(results, "%s;%s;%s;%s;%d;%d;%d;%.2f;%lu;%lu;%lu;%.2f\n", first_time_string,
 		       last_time_string, first_buf, last_buf,num_commits,
-		       first_loc, last_loc, ratio, changed_lines, churn);
+			first_loc, last_loc, ratio, diff.insertions, diff.deletions,
+			diff.changes, churn);
+
+		printf("%s", results);
 
 		/* cleanup */
 		git_commit_free(first_commit);
 		git_commit_free(last_commit);
-	} else {
-		if (print_zeros) {
-			int i;
-			for (i = 0; i < 10; i++) {
-				printf("0;");
-			}
-			printf("\n");
-		}
 	}
 }
 
-unsigned long int calculate_interval_code_churn(git_repository *repo,
-						const interval interval, const char *extension) {
+diffresult calculate_interval_code_churn(git_repository *repo,
+						const interval interval,
+						const char *extension) {
 	const char id[] = "calculate_interval_code_churn";
 #if defined(DEBUG) || defined(TRACE)
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -335,40 +234,51 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	git_oid head;
 	git_revwalk *walk = NULL;
 	git_commit *commit;
-	time_t commit_time;
-	time_t first_commit_time = 0;
-	git_oid first_commit;
+	setenv( "TC", "CEST", 1 );
+	git_time_t commit_time;
 	git_oid last_commit;
-	time_t last_commit_time = 0;
+	git_time_t last_commit_time = 0;
 	int time_string_length = strlen("2014-10-23 00:00") + 1;
 	int num_commits = 0;
-	unsigned long int total_changed_lines = 0;
-	unsigned long int changed_lines = 0;
+	diffresult total_diff;
+	diffresult diff;
+	total_diff.insertions = 0;
+	total_diff.deletions = 0;
+	total_diff.changes = 0;
+	diff.insertions = 0;
+	diff.deletions = 0;
+	diff.changes = 0;
 	struct tm *tm;
 	struct tm tm_min_time;
 	char from_time_string[time_string_length];
 	char to_time_string[time_string_length];
-	time_t min_time = time(NULL);
+	git_time_t min_time = time(NULL);
 
-	tm = localtime(&min_time);
+	tm = gmtime(&min_time);
 	tm_min_time = *tm;
 
+	/* set min_time to beginning of month or year */
 	switch (interval) {
 	case YEAR:
 		tm_min_time.tm_mon = 0;
+		/* fallthrough to also set to beginning of month */
 	case MONTH:
 		tm_min_time.tm_mday = 1;	
 	}
 
+	/* set to 0:00:00 */
 	tm_min_time.tm_sec = 0;
 	tm_min_time.tm_min = 0;
 	tm_min_time.tm_hour = 0;
 
-	min_time = mktime(&tm_min_time);
+	/* we have no information on daylight saving time*/
+	tm_min_time.tm_isdst = -1;
+
+	min_time = tm_to_utc(&tm_min_time);
 
 #if defined(DEBUG) || defined(TRACE)
 	strftime(from_time_string, time_string_length, "%F %H:%M", &tm_min_time);
-	print_debug("%s %s - Analyzing until %s\n", debug, id, from_time_string);
+	print_debug("%s %s - Analyzing until %s (%lu)\n", debug, id, from_time_string, min_time);
 #endif
 
 	git_reference_name_to_id(&head, repo, "HEAD");
@@ -389,17 +299,19 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 
 #if defined(DEBUG) || defined(TRACE)
 		char commit_time_string[time_string_length];
-		tm = localtime(&commit_time);
+		tm = gmtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-		print_debug("%s %s - Commit found: %s\n", debug, id, commit_time_string);
+		print_debug("%s %s - Commit found: %s (%lu)\n", debug, id, commit_time_string, commit_time);
 #endif
 
-		num_commits = num_commits + 1;
-				
 		if (num_commits >= 2) {
-	int diff = calculate_diff(repo, &prev_oid, &cur_oid, extension);
-			changed_lines = changed_lines + diff;
-			total_changed_lines = total_changed_lines + diff;
+			diffresult cur_diff = calculate_diff(repo, &cur_oid, &prev_oid, extension);
+			diff.insertions = diff.insertions + cur_diff.insertions;
+			diff.deletions = diff.deletions + cur_diff.deletions;
+			diff.changes = diff.changes + cur_diff.changes;
+			total_diff.insertions = total_diff.insertions + cur_diff.insertions;
+			total_diff.deletions = total_diff.deletions + cur_diff.deletions;
+			total_diff.changes = total_diff.changes + cur_diff.changes;
 		}
 
 		/* if the commit is not in the time interval, calculate churn and continue */
@@ -409,14 +321,16 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 				    debug, id, commit_time_string);
 #endif
 			/* print results, reset counters and continue */
-			print_results(repo, &first_commit, &last_commit, num_commits,
-				      changed_lines, false, extension);
+			print_results(repo, &cur_oid, &last_commit, num_commits,
+				      diff, false, extension);
 
 			/* reset counters */
 			if (num_commits > 1) {
 				last_commit = cur_oid;
 				last_commit_time = commit_time;
-				changed_lines = 0;
+				diff.insertions = 0;
+				diff.deletions = 0;
+				diff.changes = 0;
 				num_commits = 1;
 			}
 
@@ -432,7 +346,12 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 				case YEAR:
 					tm_min_time.tm_year = tm_min_time.tm_year - 1;
 				}
-				min_time = mktime(&tm_min_time);
+
+				tm_min_time.tm_hour = 0;
+
+				/* we have no information on daylight saving time*/
+				tm_min_time.tm_isdst = -1;
+				min_time = tm_to_utc(&tm_min_time);
 			}
 #if defined(DEBUG) || defined(TRACE)
 			strftime(from_time_string, time_string_length, "%F %H:%M",
@@ -441,14 +360,13 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 				    from_time_string);
 #endif
 		}
-
-		first_commit_time = commit_time;
-		first_commit = cur_oid;
+		
+		num_commits = num_commits + 1;
 		prev_oid = cur_oid;
 	}
 
-	print_results(repo, &first_commit, &last_commit, num_commits,
-		      changed_lines, false, extension);
+	print_results(repo, &cur_oid, &last_commit, num_commits,
+		      diff, false, extension);
 
 	git_commit_free(commit);
 
@@ -459,16 +377,16 @@ unsigned long int calculate_interval_code_churn(git_repository *repo,
 	}
 	print_debug("%s %s - %d commits found\n", debug, id, num_commits);
 	print_debug("%%s %s - lu total lines of changed code\n", debug, id,
-		    total_changed_lines);
+		    total_diff.changes);
 #endif
 
 	/* cleanup */
 	git_revwalk_free(walk);
 
-	return total_changed_lines;
+	return total_diff;
 }
 
-unsigned long int calculate_code_churn(git_repository *repo, const char *extension) {
+diffresult calculate_code_churn(git_repository *repo, const char *extension) {
 	const char id[] = "calculate_code_churn";
 #if defined(DEBUG) || defined(TRACE)
 	print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -480,14 +398,17 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 	git_oid head;
 	git_revwalk *walk = NULL;
 	git_commit *commit;
-	time_t commit_time;
-	time_t first_commit_time = 0;
+	git_time_t commit_time;
+	git_time_t first_commit_time = 0;
 	git_oid first_commit;
 	git_oid last_commit;
-	time_t last_commit_time = 0;
+	git_time_t last_commit_time = 0;
 	int time_string_length = strlen("2014-10-23 00:00") + 1;
 	int num_commits = 0;
-	unsigned long int total_changed_lines = 0;
+	diffresult total_diff;
+	total_diff.insertions = 0;
+	total_diff.deletions = 0;
+	total_diff.changes = 0;
 	struct tm *tm;
 	char from_time_string[time_string_length];
 	char to_time_string[time_string_length];
@@ -510,7 +431,7 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 
 #if defined(DEBUG) || defined(TRACE)
 		char commit_time_string[time_string_length];
-		tm = localtime(&commit_time);
+		tm = gmtime(&commit_time);
 		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
 		print_debug("%s %s - Commit found: %s\n", debug, id, commit_time_string);
 #endif
@@ -521,8 +442,10 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 		num_commits = num_commits + 1;
 
 		if (num_commits >= 2) {
-			total_changed_lines = total_changed_lines
-				+ calculate_diff(repo, &prev_oid, &cur_oid, extension);
+			diffresult cur_diff = calculate_diff(repo, &prev_oid, &cur_oid, extension);
+			total_diff.insertions = total_diff.insertions + cur_diff.insertions;
+			total_diff.deletions = total_diff.deletions + cur_diff.deletions;
+			total_diff.changes = total_diff.changes + cur_diff.changes;
 		}
 
 		prev_oid = cur_oid;
@@ -540,12 +463,12 @@ unsigned long int calculate_code_churn(git_repository *repo, const char *extensi
 
 	/* print results */
 	print_results(repo, &first_commit, &last_commit, num_commits,
-		      total_changed_lines, false, extension);
+		      total_diff, false, extension);
 
 	/* cleanup */
 	git_revwalk_free(walk);
 
-	return total_changed_lines;
+	return total_diff;
 }
 
 int main(int argc, char **argv) {
@@ -568,9 +491,8 @@ int main(int argc, char **argv) {
 	int c;
 	interval interval = 0;
 	char extension[255] = "";
-	
 
-	while ((c = getopt(argc, argv, "hl:my")) != -1) {
+	while ((c = getopt(argc, argv, "hjl:my")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
@@ -676,9 +598,9 @@ int main(int argc, char **argv) {
 
 		/* run the actual analysis */
 		if (interval > 0) {
-			calculate_interval_code_churn(repo, interval, extension);
+		  calculate_interval_code_churn(repo, interval, extension);
 		} else {
-			calculate_code_churn(repo, extension);
+		  calculate_code_churn(repo, extension);
 		}
 
 		/* cleanup */
