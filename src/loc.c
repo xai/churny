@@ -19,7 +19,8 @@
 
 #include "loc.h"
 
-int calculate_loc(git_repository *repo, const git_oid *oid, const char *extension) {
+int calculate_loc(git_repository *repo, const git_oid *oid,
+		  const char *extension) {
 	const char id[] = "calculate_loc";
 
 	int loc = 0;
@@ -35,7 +36,8 @@ int calculate_loc(git_repository *repo, const git_oid *oid, const char *extensio
 	char buf[GIT_OID_HEXSZ + 1];
 	git_oid_fmt(buf, oid);
 	buf[GIT_OID_HEXSZ] = '\0';
-	print_debug("%s %s - counting lines of commit %s: ", debug, id, buf);
+	print_debug("%s %s - counting lines of commit %s: ", debug,
+		    id, buf);
 #endif
 
 	git_commit_lookup(&commit, repo, oid);
@@ -52,7 +54,13 @@ int calculate_loc(git_repository *repo, const git_oid *oid, const char *extensio
 	}
 
 	char cmd[200 + strlen(find_options)];
-	sprintf(cmd, "find . -type f %s -not -path './.git/*' -print | xargs file --mime-encoding 2>/dev/null | egrep -i ': .*ascii' | cut -d: -f1 | xargs cat 2>/dev/null | egrep -v '^[[:space:]]*$' | wc -l", find_options);
+	sprintf(cmd, "find . -type f %s -not -path './.git/*' -print "
+		"| xargs file --mime-encoding 2>/dev/null "
+		"| egrep -i ': .*ascii' "
+		"| cut -d: -f1 "
+		"| xargs cat 2>/dev/null "
+		"| egrep -v '^[[:space:]]*$' "
+		"| wc -l", find_options);
 
 #ifdef DEBUG
 	char cwd[1024];
@@ -75,15 +83,18 @@ int calculate_loc(git_repository *repo, const git_oid *oid, const char *extensio
 	if (fgets(prbuf, sizeof(prbuf) - 1, fp) != NULL) {
 		loc = atoi(prbuf);
 	} else {
-		exit_error(EXIT_FAILURE, "%s %s - Error while counting lines of code\n",
-				fatal, id);
+		exit_error(EXIT_FAILURE, "%s %s - Error while "
+			   "counting lines of code\n", fatal, id);
 	}
 
 	pclose(fp);
 
 #ifdef DEBUG
 	if (loc == 1) {
-		sprintf(cmd, "find . -type f %s -not -path './.git/*' -print | xargs file --mime-encoding | egrep -i ': .*ascii' | cut -d: -f1", find_options);
+		sprintf(cmd, "find . -type f %s -not -path './.git/*'"
+			" -print | xargs file --mime-encoding "
+			"| egrep -i ': .*ascii' | cut -d: -f1",
+			find_options);
 		fp = popen(cmd, "r");
 		memset(prbuf, 0, sizeof(prbuf));
 

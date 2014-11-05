@@ -24,6 +24,7 @@
 #include <string.h>
 #include "utils.h"
 
-int calculate_loc(git_repository *repo, const git_oid *oid, const char *extension);
+int calculate_loc(git_repository *repo, const git_oid *oid,
+		  const char *extension);
 
 #endif
