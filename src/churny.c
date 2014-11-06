@@ -38,6 +38,7 @@
 
 #include "utils.h"
 #include "loc.h"
+#include "list.h"
 
 typedef int interval;
 #define YEAR 1
@@ -53,8 +54,8 @@ static void usage(const char *basename) {
 
 static void print_csv_header() {
 	printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;"
-	       "Base LoC;Last LoC;Ratio;Added LoC;Removed LoC;"
-	       "Changed LoC;" "Relative Code Churn");
+	       "Authors;Base LoC;Last LoC;Ratio;Added LoC;"
+	       "Removed LoC;" "Changed LoC;" "Relative Code Churn");
 }
 
 diffresult calculate_diff(git_repository *repo, const git_oid *prev,
@@ -107,8 +108,8 @@ diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 #endif
 
 	if (strlen(extension) > 0) {
-		/* look at each line and
-		 * add changes if extension type matches */
+		/* look at each line and add changes
+		 * if extension type matches */
 		if (b.ptr == NULL) {
 			return result;
 		}
@@ -173,13 +174,12 @@ diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 	char prev_time_string[time_string_length];
 	char cur_time_string[time_string_length];
 	tm = localtime(&prev_time);
-	strftime(prev_time_string, time_string_length, "%F %H:%M",
-		 tm);
+	strftime(prev_time_string, time_string_length, "%F %H:%M", tm);
 	tm = gmtime(&cur_time);
 	strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
 	print_debug("%s %s - diff(%s, %s) = %d changed lines "
 		    "(Time range: " "%s - %s, %d day%s)\n", debug, id,
-		    cur_buf, prev_buf, result.changes,
+		    debug, id, cur_buf, prev_buf, result.changes,
 		    cur_time_string, prev_time_string, time_diff, s);
 #endif
 
@@ -188,9 +188,9 @@ diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 
 void print_results(git_repository *repo, const git_oid *first,
 		   const git_oid *last, const int num_commits,
-		   const diffresult diff, const bool print_zeros,
+		   const diffresult diff, int number_authors,
 		   const char *extension) {
-	if (num_commits > 1 || print_zeros) {
+	if (num_commits > 1) {
 		git_commit *first_commit;
 		git_commit *last_commit;
 		git_time_t first_commit_time;
@@ -233,12 +233,12 @@ void print_results(git_repository *repo, const git_oid *first,
 
 		/* print results */
 		char results[1024 + 1];
-		sprintf(results, "%s;%s;%s;%s;%d;%d;%d;%.2f;%lu;%lu;"
-			"%lu;%.2f\n", first_time_string,
+		sprintf(results, "%s;%s;%s;%s;%d;%d;%d;%d;%.2f;%lu;"
+			"%lu;%lu;%.2f\n", first_time_string,
 			last_time_string, first_buf, last_buf,
-			num_commits, first_loc, last_loc, ratio,
-			diff.insertions, diff.deletions, diff.changes,
-			churn);
+			num_commits, number_authors, first_loc,
+			last_loc, ratio, diff.insertions,
+			diff.deletions, diff.changes, churn);
 
 		printf("%s", results);
 
@@ -265,6 +265,7 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 	git_commit *commit;
 	setenv( "TC", "CEST", 1 );
 	git_time_t commit_time;
+	const git_signature *signature;
 	git_oid last_commit;
 	git_time_t last_commit_time = 0;
 	int time_string_length = strlen("2014-10-23 00:00") + 1;
@@ -364,10 +365,10 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 				    "specified time window: %s\n",
 				    debug, id, commit_time_string);
 #endif
-			/* print results, reset counters,
-			 * and continue */
+			/* print results, reset counters
+			 *  and continue */
 			print_results(repo, &cur_oid, &last_commit,
-				      num_commits, diff, false,
+				      num_commits, diff, list_size(),
 				      extension);
 
 			/* reset counters */
@@ -377,7 +378,8 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 				diff.insertions = 0;
 				diff.deletions = 0;
 				diff.changes = 0;
-				num_commits = 1;
+				num_commits = 0;
+				clear_list();
 			}
 
 			while (commit_time < min_time) {
@@ -406,11 +408,17 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 				min_time = tm_to_utc(&tm_min_time);
 			}
 #if defined(DEBUG) || defined(TRACE)
-			strftime(from_time_string, time_string_length,
-				 "%F %H:%M", &tm_min_time);
+			strftime(from_time_string,
+				 time_string_length, "%F %H:%M",
+				 &tm_min_time);
 			print_debug("%s %s - Analyzing until %s\n",
 				    debug, id, from_time_string);
 #endif
+		}
+
+		signature = git_commit_author(commit);
+		if (!list_contains(signature->name)) {
+			add_to_list(signature->name);
 		}
 
 		num_commits = num_commits + 1;
@@ -418,9 +426,8 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 	}
 
 	print_results(repo, &cur_oid, &last_commit, num_commits,
-		      diff, false, extension);
+		      diff, list_size(), extension);
 
-	git_commit_free(commit);
 
 #if defined(DEBUG) || defined(TRACE)
 	char s[2] = "";
@@ -434,7 +441,9 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 #endif
 
 	/* cleanup */
+	git_commit_free(commit);
 	git_revwalk_free(walk);
+	clear_list();
 
 	return total_diff;
 }
@@ -453,6 +462,7 @@ diffresult calculate_code_churn(git_repository *repo,
 	git_oid head;
 	git_revwalk *walk = NULL;
 	git_commit *commit;
+	const git_signature *signature;
 	git_time_t commit_time;
 	git_time_t first_commit_time = 0;
 	git_oid first_commit;
@@ -496,6 +506,11 @@ diffresult calculate_code_churn(git_repository *repo,
 		first_commit_time = commit_time;
 		first_commit = cur_oid;
 
+		signature = git_commit_author(commit);
+		if (!list_contains(signature->name)) {
+			add_to_list(signature->name);
+		}
+
 		num_commits = num_commits + 1;
 
 		if (num_commits >= 2) {
@@ -513,7 +528,6 @@ diffresult calculate_code_churn(git_repository *repo,
 		prev_oid = cur_oid;
 	}
 
-	git_commit_free(commit);
 
 #if defined(DEBUG) || defined(TRACE)
 	char s[2] = "";
@@ -526,9 +540,11 @@ diffresult calculate_code_churn(git_repository *repo,
 
 	/* print results */
 	print_results(repo, &first_commit, &last_commit, num_commits,
-		      total_diff, false, extension);
+		      total_diff, list_size(), extension);
 
 	/* cleanup */
+	clear_list();
+	git_commit_free(commit);
 	git_revwalk_free(walk);
 
 	return total_diff;
@@ -617,8 +633,8 @@ int main(int argc, char **argv) {
 				/* seems to be a git repository */
 #if defined(DEBUG) || defined(TRACE)
 				print_debug("%s %s - Is a git "
-					    "repository: %s\n", debug,
-					    id, path);
+					    "repository: %s\n",
+					    debug, id, path);
 #endif
 
 				/* initialize repo */
@@ -636,9 +652,9 @@ int main(int argc, char **argv) {
 
 				} else {
 					exit_error(EXIT_FAILURE,
-						   "%s %s - Could not"
-						   " open repository:"
-						   " %s\n",
+						   "%s %s - Could "
+						   "not open "
+						   "repository: %s\n",
 						   fatal, id, path);
 				}
 			} else {
