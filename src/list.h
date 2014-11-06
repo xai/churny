@@ -25,22 +25,19 @@
 #include<stdbool.h>
 #include<string.h>
 
-struct element_struct {
+struct node_struct {
 	char *value;
-	struct element_struct *next;
+	struct node_struct *next;
 };
 
-typedef struct element_struct elem;
+typedef struct node_struct node;
 
-
-elem * create_list(char *value);
-
-elem * add_to_list(char *value);
+node * list_add(char *value);
 
 bool list_contains(char *value);
 
 int list_size();
 
-void clear_list();
+void list_clear();
 
 #endif

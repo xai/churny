@@ -19,28 +19,12 @@
 
 #include "list.h"
 
-elem *head = NULL;
-elem *cur = NULL;
+node *head = NULL;
+node *cur = NULL;
 int size = 0;
 
-elem * create_list(char *value) {
-	elem *new = (elem *) malloc(sizeof(elem));
-
-	if (new == NULL) {
-		return NULL;
-	}
-
-	new->value = value;
-	new->next = NULL;
-	head = new;
-	cur = new;
-	size = 0;
-
-	return new;
-}
-
-elem * add_to_list(char *value) {
-	elem *new = (elem *) malloc(sizeof(elem));
+node * list_add(char *value) {
+	node *new = (node *) malloc(sizeof(node));
 
 	if (new == NULL) {
 		return NULL;
@@ -69,7 +53,7 @@ elem * add_to_list(char *value) {
 }
 
 bool list_contains(char *value) {
-	elem *ptr = head;
+	node *ptr = head;
 
 	while (ptr != NULL) {
 		if (strcmp(value, ptr->value) == 0) {
@@ -86,9 +70,9 @@ int list_size() {
 	return size;
 }
 
-void clear_list() {
-	elem *ptr = head;
-	elem *del;
+void list_clear() {
+	node *ptr = head;
+	node *del;
 
 	while (ptr != NULL) {
 		del = ptr;

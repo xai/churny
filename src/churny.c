@@ -379,7 +379,7 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 				diff.deletions = 0;
 				diff.changes = 0;
 				num_commits = 0;
-				clear_list();
+				list_clear();
 			}
 
 			while (commit_time < min_time) {
@@ -418,7 +418,7 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 
 		signature = git_commit_author(commit);
 		if (!list_contains(signature->name)) {
-			add_to_list(signature->name);
+			list_add(signature->name);
 		}
 
 		num_commits = num_commits + 1;
@@ -443,7 +443,7 @@ diffresult calculate_interval_code_churn(git_repository *repo,
 	/* cleanup */
 	git_commit_free(commit);
 	git_revwalk_free(walk);
-	clear_list();
+	list_clear();
 
 	return total_diff;
 }
@@ -508,7 +508,7 @@ diffresult calculate_code_churn(git_repository *repo,
 
 		signature = git_commit_author(commit);
 		if (!list_contains(signature->name)) {
-			add_to_list(signature->name);
+			list_add(signature->name);
 		}
 
 		num_commits = num_commits + 1;
@@ -543,7 +543,7 @@ diffresult calculate_code_churn(git_repository *repo,
 		      total_diff, list_size(), extension);
 
 	/* cleanup */
-	clear_list();
+	list_clear();
 	git_commit_free(commit);
 	git_revwalk_free(walk);
 
