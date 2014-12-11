@@ -39,7 +39,7 @@ void static usage(const char *basename) {
 void static print_csv_header() {
 	printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;"
 			"Authors;Base LoC;Last LoC;Ratio;Added LoC;"
-			"Removed LoC;" "Changed LoC;" "Relative Code Churn");
+			"Removed LoC;Changed LoC;Relative Code Churn");
 }
 
 diffresult calculate_diff(git_repository *repo, const git_oid *prev,
@@ -143,7 +143,7 @@ diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 
 #ifdef TRACE
 	print_debug("%s %s - %d insertions + %d deletions "
-		    "= %d changed " "lines\n", trace, id,
+		    "= %d changed lines\n", trace, id,
 		    result.insertions, result.deletions,
 		    result.changes);
 #endif
@@ -162,7 +162,7 @@ diffresult calculate_diff(git_repository *repo, const git_oid *prev,
 	tm = gmtime(&cur_time);
 	strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
 	print_debug("%s %s - diff(%s, %s) = %d changed lines "
-		    "(Time range: " "%s - %s, %d day%s)\n", debug, id,
+		    "(Time range: %s - %s, %d day%s)\n", debug, id,
 		    debug, id, cur_buf, prev_buf, result.changes,
 		    cur_time_string, prev_time_string, time_diff, s);
 #endif
