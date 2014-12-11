@@ -26,25 +26,9 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdarg.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdbool.h>
-#include <git2.h>
+#include "churny.h"
 
-#include "utils.h"
-#include "loc.h"
-#include "list.h"
-
-typedef int interval;
-#define YEAR 1
-#define MONTH 2
-
-static void usage(const char *basename) {
+void static usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
 	printf("  m calculate churn separately for each month\n");
@@ -52,10 +36,10 @@ static void usage(const char *basename) {
 	printf("\n");
 }
 
-static void print_csv_header() {
+void static print_csv_header() {
 	printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;"
-	       "Authors;Base LoC;Last LoC;Ratio;Added LoC;"
-	       "Removed LoC;" "Changed LoC;" "Relative Code Churn");
+			"Authors;Base LoC;Last LoC;Ratio;Added LoC;"
+			"Removed LoC;" "Changed LoC;" "Relative Code Churn");
 }
 
 diffresult calculate_diff(git_repository *repo, const git_oid *prev,
@@ -249,8 +233,8 @@ void print_results(git_repository *repo, const git_oid *first,
 }
 
 diffresult calculate_interval_code_churn(git_repository *repo,
-					 const interval interval,
-					 const char *extension) {
+		const interval interval,
+		const char *extension) {
 	const char id[] = "calculate_interval_code_churn";
 #if defined(DEBUG) || defined(TRACE)
 	print_debug("%s %s - %s\n", debug, id,
