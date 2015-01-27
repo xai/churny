@@ -622,7 +622,7 @@ int main(int argc, char **argv) {
 #endif
 
 				/* initialize repo */
-				git_threads_init();
+				git_libgit2_init();
 				if (git_repository_open(&repo, path)
 				    == 0) {
 
@@ -685,6 +685,6 @@ int main(int argc, char **argv) {
 		git_repository_free(repo);
 	}
 
-	git_threads_shutdown();
+	git_libgit2_shutdown();
 	return EXIT_SUCCESS;
 }
