@@ -31,6 +31,7 @@
 void static usage(const char *basename) {
 	printf("Usage: %s [option]... [file]\n", basename);
 	printf("  h\tPrints this message\n");
+	printf("  c\tOnly count lines of code\n");
 	printf("  m calculate churn separately for each month\n");
 	printf("  y calculate churn separately for each year\n");
 	printf("\n");
@@ -553,13 +554,17 @@ int main(int argc, char **argv) {
 	/* parse arguments */
 	int c;
 	interval interval = 0;
+	bool count_only = false;
 	char extension[255] = "";
 
-	while ((c = getopt(argc, argv, "hjl:my")) != -1) {
+	while ((c = getopt(argc, argv, "chjl:my")) != -1) {
 		switch (c) {
 		case 'h':
 			usage(argv[0]);
 			return EXIT_SUCCESS;
+		case 'c':
+			count_only = true;
+			break;
 		case 'l':
 			strcpy(extension, optarg);
 			break;
@@ -671,14 +676,18 @@ int main(int argc, char **argv) {
 	}
 
 	if (repo != NULL) {
-		print_csv_header();
-
 		/* run the actual analysis */
-		if (interval > 0) {
-		  calculate_interval_code_churn(repo, interval,
-						extension);
+		if (count_only) {
+			/* only count LOC, print result and exit */
+			printf("%d\n", calculate_loc_dir(git_repository_workdir(repo),
+						extension));
+		} else if (interval > 0) {
+			print_csv_header();
+			calculate_interval_code_churn(repo, interval,
+					extension);
 		} else {
-		  calculate_code_churn(repo, extension);
+			print_csv_header();
+			calculate_code_churn(repo, extension);
 		}
 
 		/* cleanup */

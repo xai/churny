@@ -44,6 +44,34 @@ int calculate_loc(git_repository *repo, const git_oid *oid,
 	git_object_lookup(&gobject, repo, oid, GIT_OBJ_COMMIT);
 	git_checkout_tree(repo, gobject, &opts);
 
+	loc = calculate_loc_dir(NULL, extension);
+
+	git_object_free(gobject);
+	git_commit_free(commit);
+
+	/* checkout HEAD again */
+	git_checkout_head(repo, &opts);
+
+#if defined(DEBUG) || defined(TRACE)
+	print_debug("%d\n", loc);
+#endif
+
+	if (loc < 0) {
+		exit_error(EXIT_FAILURE, "%s %s - Error while "
+				"counting lines of code\n", fatal, id);
+	}
+	return loc;
+}
+
+int calculate_loc_dir(const char *path, const char *extension) {
+	const char id[] = "calculate_loc_dir";
+
+	int loc = -1;
+
+	if (path != NULL) {
+		chdir(path);
+	}
+
 	char find_name[] = "-name \\*";
 	char find_options[strlen(extension) + strlen(find_name) + 1];
 	if (strlen(extension) > 0) {
@@ -75,9 +103,8 @@ int calculate_loc(git_repository *repo, const git_oid *oid,
 	memset(prbuf, 0, sizeof(prbuf));
 
 	if (fp == NULL) {
-		git_checkout_head(repo, NULL);
 		perror("popen");
-		exit(EXIT_FAILURE);
+		return loc;
 	}
 
 	if (fgets(prbuf, sizeof(prbuf) - 1, fp) != NULL) {
@@ -99,9 +126,8 @@ int calculate_loc(git_repository *repo, const git_oid *oid,
 		memset(prbuf, 0, sizeof(prbuf));
 
 		if (fp == NULL) {
-			git_checkout_head(repo, NULL);
 			perror("popen");
-			exit(EXIT_FAILURE);
+			return -1;
 		}
 
 		while (fgets(prbuf, sizeof(prbuf) - 1, fp) != NULL) {
@@ -111,16 +137,5 @@ int calculate_loc(git_repository *repo, const git_oid *oid,
 		pclose(fp);
 	}
 #endif
-
-	git_object_free(gobject);
-	git_commit_free(commit);
-
-	/* checkout HEAD again */
-	git_checkout_head(repo, &opts);
-
-#if defined(DEBUG) || defined(TRACE)
-	print_debug("%d\n", loc);
-#endif
-
 	return loc;
 }
