@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2014 Olaf Lessenich.  All rights reserved.
+ * Copyright (C) 2014 Olaf Lessenich
+ * Copyright (C) 2014-2015 University of Passau, Germany
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -15,6 +16,8 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 021110-1307, USA.
  *
+ * Contributors:
+ *     Olaf Lessenich <lessenic@fim.uni-passau.de>
  */
 
 #ifndef LIST_H_   /* Include guard */
