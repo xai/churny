@@ -15,3 +15,6 @@ trace: src/churny.c src/churny.h src/loc.c src/loc.h src/utils.c src/utils.h src
 valgrind: src/churny.c src/churny.h src/loc.c src/loc.h src/utils.c src/utils.h src/list.c src/list.h
 	$(CC) $(CFLAGS) -g -O0 -o churny src/churny.c src/loc.c src/utils.c src/list.c
 
+clean:
+	rm churny
+
