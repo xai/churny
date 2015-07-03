@@ -20,24 +20,24 @@
  *     Olaf Lessenich <lessenic@fim.uni-passau.de>
  */
 
-#ifndef LIST_H_   /* Include guard */
+#ifndef LIST_H_ /* Include guard */
 #define LIST_H_
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<stdbool.h>
-#include<string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 struct node_struct {
-	char *value;
-	struct node_struct *next;
+    char* value;
+    struct node_struct* next;
 };
 
 typedef struct node_struct node;
 
-node * list_add(char *value);
+node* list_add(char* value);
 
-bool list_contains(char *value);
+bool list_contains(char* value);
 
 int list_size();
 

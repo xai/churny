@@ -20,7 +20,7 @@
  *     Olaf Lessenich <lessenic@fim.uni-passau.de>
  */
 
-#ifndef UTILS_H_   /* Include guard */
+#ifndef UTILS_H_ /* Include guard */
 #define UTILS_H_
 
 #include <stdio.h>
@@ -34,14 +34,14 @@ extern const char debug[];
 extern const char trace[];
 
 typedef struct {
-	unsigned long int insertions;
-	unsigned long int deletions;
-	unsigned long int changes;
+    unsigned long int insertions;
+    unsigned long int deletions;
+    unsigned long int changes;
 } diffresult;
 
-void print_debug(const char *format, ...);
-void print_error(const char *format, ...);
-void exit_error(const int err, const char *format, ...);
-git_time_t tm_to_utc(struct tm *tm);
+void print_debug(const char* format, ...);
+void print_error(const char* format, ...);
+void exit_error(const int err, const char* format, ...);
+git_time_t tm_to_utc(struct tm* tm);
 
 #endif

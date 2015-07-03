@@ -20,16 +20,16 @@
  *     Olaf Lessenich <lessenic@fim.uni-passau.de>
  */
 
-#ifndef LOC_H_   /* include guard */
+#ifndef LOC_H_ /* include guard */
 #define LOC_H_
 
 #include <git2.h>
 #include <string.h>
 #include "utils.h"
 
-int calculate_loc(git_repository *repo, const git_oid *oid,
-		  const char *extension);
+int calculate_loc(
+    git_repository* repo, const git_oid* oid, const char* extension);
 
-int calculate_loc_dir(const char *path, const char *extension);
+int calculate_loc_dir(const char* path, const char* extension);
 
 #endif
