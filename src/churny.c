@@ -161,8 +161,8 @@ diffresult calculate_diff(git_repository* repo, const git_oid* prev,
     strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
     print_debug("%s %s - diff(%s, %s) = %d changed lines "
                 "(Time range: %s - %s, %d day%s)\n",
-        debug, id, cur_buf, prev_buf, result.changes,
-        cur_time_string, prev_time_string, time_diff, s);
+        debug, id, cur_buf, prev_buf, result.changes, cur_time_string,
+        prev_time_string, time_diff, s);
 #endif
 
     return result;
@@ -290,6 +290,8 @@ diffresult calculate_interval_code_churn(
     git_revwalk_sorting(walk, GIT_SORT_TIME);
     git_revwalk_push(walk, &head);
 
+    List* list = list_create();
+
     /* iterates over all commits starting with the latest one */
     while (!git_revwalk_next(&cur_oid, walk)) {
 
@@ -331,7 +333,7 @@ diffresult calculate_interval_code_churn(
             /* print results, reset counters
              *  and continue */
             print_results(repo, &cur_oid, &last_commit, num_commits, diff,
-                list_size(), extension);
+                list->size, extension);
 
             /* reset counters */
             if (num_commits > 1) {
@@ -341,7 +343,7 @@ diffresult calculate_interval_code_churn(
                 diff.deletions = 0;
                 diff.changes = 0;
                 num_commits = 0;
-                list_clear();
+                list_clear(list);
             }
 
             while (commit_time < min_time) {
@@ -373,16 +375,16 @@ diffresult calculate_interval_code_churn(
         }
 
         signature = git_commit_author(commit);
-        if (!list_contains(signature->name)) {
-            list_add(signature->name);
+        if (!list_contains(list, signature->name)) {
+            list_add(list, signature->name);
         }
 
         num_commits = num_commits + 1;
         prev_oid = cur_oid;
     }
 
-    print_results(repo, &cur_oid, &last_commit, num_commits, diff, list_size(),
-        extension);
+    print_results(
+        repo, &cur_oid, &last_commit, num_commits, diff, list->size, extension);
 
 #if defined(DEBUG) || defined(TRACE)
     char s[2] = "";
@@ -397,7 +399,7 @@ diffresult calculate_interval_code_churn(
     /* cleanup */
     git_commit_free(commit);
     git_revwalk_free(walk);
-    list_clear();
+    list_destroy(list);
 
     return total_diff;
 }
@@ -435,6 +437,8 @@ diffresult calculate_code_churn(git_repository* repo, const char* extension) {
     git_revwalk_sorting(walk, GIT_SORT_TIME);
     git_revwalk_push(walk, &head);
 
+    List* list = list_create();
+
     /* iterates over all commits starting with the latest one */
     while (!git_revwalk_next(&cur_oid, walk)) {
 
@@ -458,8 +462,8 @@ diffresult calculate_code_churn(git_repository* repo, const char* extension) {
         first_commit = cur_oid;
 
         signature = git_commit_author(commit);
-        if (!list_contains(signature->name)) {
-            list_add(signature->name);
+        if (!list_contains(list, signature->name)) {
+            list_add(list, signature->name);
         }
 
         num_commits = num_commits + 1;
@@ -485,10 +489,10 @@ diffresult calculate_code_churn(git_repository* repo, const char* extension) {
 
     /* print results */
     print_results(repo, &first_commit, &last_commit, num_commits, total_diff,
-        list_size(), extension);
+        list->size, extension);
 
     /* cleanup */
-    list_clear();
+    list_destroy(list);
     git_commit_free(commit);
     git_revwalk_free(walk);
 

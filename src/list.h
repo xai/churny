@@ -28,19 +28,27 @@
 #include <stdbool.h>
 #include <string.h>
 
-struct node_struct {
+typedef struct Node {
     char* value;
-    struct node_struct* next;
-};
+    struct Node* next;
+} Node;
 
-typedef struct node_struct node;
+typedef struct List {
+    int size;
+    struct Node* first;
+    struct Node* last;
+} List;
 
-node* list_add(char* value);
+List* list_create();
 
-bool list_contains(char* value);
+void list_add(List* list, char* value);
 
-int list_size();
+bool list_contains(List* list, char* value);
 
-void list_clear();
+int list_size(List* list);
+
+void list_clear(List* list);
+
+void list_destroy(List* list);
 
 #endif

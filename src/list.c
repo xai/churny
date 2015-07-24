@@ -22,41 +22,41 @@
 
 #include "list.h"
 
-node* head = NULL;
-node* cur = NULL;
-int size = 0;
+List* list_create() {
+    List* list = (List*)malloc(sizeof(List));
+    list->first = NULL;
+    list->last = NULL;
+    list->size = 0;
+    return list;
+}
 
-node* list_add(char* value) {
-    node* new = (node*)malloc(sizeof(node));
+void list_add(List* list, char* value) {
+    Node* new = (Node*)malloc(sizeof(Node));
 
     if (new == NULL) {
-        return NULL;
+        return;
     }
 
     new->value = value;
     new->next = NULL;
 
-    if (cur != NULL) {
-        cur->next = new;
-    }
-
-    cur = new;
-
-    if (head == NULL) {
-        head = new;
+    if (list->last == NULL) {
+        list->first = new;
+        list->last = new;
+    } else {
+        list->last->next = new;
+        list->last = new;
     }
 
 #if defined(DEBUG) || defined(TRACE)
     printf("Added %s to list\n", value);
 #endif
 
-    size = size + 1;
-
-    return new;
+    list->size = list->size + 1;
 }
 
-bool list_contains(char* value) {
-    node* ptr = head;
+bool list_contains(List* list, char* value) {
+    Node* ptr = list->first;
 
     while (ptr != NULL) {
         if (strcmp(value, ptr->value) == 0) {
@@ -69,24 +69,29 @@ bool list_contains(char* value) {
     return false;
 }
 
-int list_size() { return size; }
+int list_size(List* list) { return list->size; }
 
-void list_clear() {
-    node* ptr = head;
-    node* del;
+void list_clear(List* list) {
+    Node* ptr = list->first;
+    Node* del;
 
     while (ptr != NULL) {
         del = ptr;
         ptr = ptr->next;
         free(del);
         del = NULL;
-        size = size - 1;
+        list->size = list->size - 1;
     }
 
-    head = NULL;
-    cur = NULL;
+    list->first = NULL;
+    list->last = NULL;
 
-    if (size != 0) {
-        printf("Error: List has size %d after clear().\n", size);
+    if (list->size != 0) {
+        printf("Error: List has size %d after clear().\n", list->size);
     }
+}
+
+void list_destroy(List* list) {
+    list_clear(list);
+    free(list);
 }
