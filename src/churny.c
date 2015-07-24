@@ -161,7 +161,7 @@ diffresult calculate_diff(git_repository* repo, const git_oid* prev,
     strftime(cur_time_string, time_string_length, "%F %H:%M", tm);
     print_debug("%s %s - diff(%s, %s) = %d changed lines "
                 "(Time range: %s - %s, %d day%s)\n",
-        debug, id, debug, id, cur_buf, prev_buf, result.changes,
+        debug, id, cur_buf, prev_buf, result.changes,
         cur_time_string, prev_time_string, time_diff, s);
 #endif
 
