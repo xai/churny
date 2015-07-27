@@ -7,3 +7,6 @@
 *.swp
 /churny
 /src/tags
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
