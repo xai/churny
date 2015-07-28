@@ -3,6 +3,8 @@ import os
 import sys
 import subprocess
 import multiprocessing
+import time
+from time import perf_counter
 from configparser import ConfigParser
 
 from github import Github
@@ -23,12 +25,16 @@ def run(cmd, output_path):
 
 
 def analyze(url, api_token):
-    url = url.strip().replace("http://www.github.com/", "")
-    url = url.strip().replace("https://www.github.com/", "")
-    g = Github(api_token)
-    repo = g.get_repo(url)
+    github_url = url.strip().replace("http://www.github.com/", "")
+    github_url = github_url.strip().replace("https://www.github.com/", "")
+    github_url = github_url.strip().replace("http://github.com/", "")
+    github_url = github_url.strip().replace("https://github.com/", "")
 
-    print("Analyzing: %s" % repo.clone_url)
+    print("Start analyzing: %s" % github_url)
+    start_time = time.perf_counter()
+
+    g = Github(api_token)
+    repo = g.get_repo(github_url)
 
     stats = open(os.path.join("github", repo.owner.login + "-" + repo.name), "w")
     stats.write("forks;branches;watchers;stars\n")
@@ -42,15 +48,16 @@ def analyze(url, api_token):
 
     # initialize repo
     if os.path.exists(repo_path):
-        print("%s already cloned" % url)
         cloned_repo = Repository(discover_repository(repo_path))
     else:
-        print("Cloning %s into %s" % (url, repo_path))
         cloned_repo = clone_repository(repo.clone_url, repo_path)
 
     # run churny
     run("churny " + repo_path, os.path.join("overall", repo.owner.login + "-" + repo.name))
     run("churny -m " + repo_path, os.path.join("monthly", repo.owner.login + "-" + repo.name))
+
+    elapsed_time = time.perf_counter() - start_time
+    print("Stop analyzing: %s (%d s)" % (github_url, elapsed_time))
 
 
 def usage(path):
