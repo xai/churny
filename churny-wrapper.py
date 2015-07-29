@@ -6,10 +6,11 @@ import multiprocessing
 import time
 from time import perf_counter
 from configparser import ConfigParser
+from multiprocessing import Process, Queue
+from queue import Empty
 
 from github import Github
 from pygit2 import clone_repository, discover_repository, Repository
-from joblib import Parallel, delayed
 
 
 def warning(*objs):
@@ -65,6 +66,16 @@ def usage(path):
     print("\tFILE contains URLs to GitHub repositories, separated by newline\n")
 
 
+def process(queue, api_token):
+    print("Started process %d" % os.getpid())
+
+    while not queue.empty():
+        try:
+            analyze(queue.get(False), api_token)
+        except Empty:
+            pass
+
+
 if __name__ == "__main__":
     num_cores = multiprocessing.cpu_count()
 
@@ -90,6 +101,21 @@ if __name__ == "__main__":
         if not os.path.exists(directory):
             os.mkdir(directory)
 
+    queue = Queue()
+
     for arg in sys.argv[1:]:
         urls = open(arg, 'r')
-        Parallel(n_jobs=num_cores)(delayed(analyze)(url, api_token) for url in urls)
+
+        for url in urls:
+            queue.put(url)
+
+    procs = []
+
+    for i in range(min(num_cores, queue.qsize())):
+        procs.append(Process(target=process, args=(queue, api_token)))
+
+    for p in procs:
+        p.start()
+
+    for p in procs:
+        p.join()
