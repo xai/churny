@@ -29,7 +29,7 @@
 #include <string.h>
 
 typedef struct Node {
-    char* value;
+    void* value;
     struct Node* next;
 } Node;
 
@@ -41,14 +41,16 @@ typedef struct List {
 
 List* list_create();
 
-void list_add(List* list, char* value);
+void list_add(List* list, void* value);
 
-bool list_contains(List* list, char* value);
+bool list_contains(List* list, void* value, int (*cmp)(void const *, void const *));
 
 int list_size(List* list);
 
 void list_clear(List* list);
 
 void list_destroy(List* list);
+
+int string_compare(void const* item1, void const* item2);
 
 #endif

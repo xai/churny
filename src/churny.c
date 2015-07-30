@@ -375,7 +375,7 @@ diffresult calculate_interval_code_churn(
         }
 
         signature = git_commit_author(commit);
-        if (!list_contains(list, signature->name)) {
+        if (!list_contains(list, signature->name, string_compare)) {
             list_add(list, signature->name);
         }
 
@@ -462,7 +462,7 @@ diffresult calculate_code_churn(git_repository* repo, const char* extension) {
         first_commit = cur_oid;
 
         signature = git_commit_author(commit);
-        if (!list_contains(list, signature->name)) {
+        if (!list_contains(list, signature->name, string_compare)) {
             list_add(list, signature->name);
         }
 

@@ -30,7 +30,7 @@ List* list_create() {
     return list;
 }
 
-void list_add(List* list, char* value) {
+void list_add(List* list, void* value) {
     Node* new = (Node*)malloc(sizeof(Node));
 
     if (new == NULL) {
@@ -55,11 +55,12 @@ void list_add(List* list, char* value) {
     list->size = list->size + 1;
 }
 
-bool list_contains(List* list, char* value) {
+bool list_contains(
+    List* list, void* value, int (*cmp)(void const*, void const*)) {
     Node* ptr = list->first;
 
     while (ptr != NULL) {
-        if (strcmp(value, ptr->value) == 0) {
+        if (cmp(value, ptr->value) == 0) {
             return true;
         }
 
@@ -94,4 +95,8 @@ void list_clear(List* list) {
 void list_destroy(List* list) {
     list_clear(list);
     free(list);
+}
+
+int string_compare(void const* item1, void const* item2) {
+    return strcmp((char const*)item1, (char const*)item2);
 }
