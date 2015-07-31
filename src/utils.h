@@ -45,6 +45,7 @@ typedef struct {
 } commit_range;
 
 typedef int interval;
+#define NONE 0
 #define YEAR 1
 #define MONTH 2
 

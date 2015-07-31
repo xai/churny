@@ -298,7 +298,7 @@ List* get_ranges(git_repository* repo, const interval interval) {
 
         /* if the commit is not in the time interval,
          * add range and continue */
-        if (commit_time < min_time) {
+        if (interval != NONE && commit_time < min_time) {
 #if defined(DEBUG) || defined(TRACE)
             print_debug("%s %s - Commit is not in "
                         "specified time window: %s\n",
@@ -351,9 +351,9 @@ List* get_ranges(git_repository* repo, const interval interval) {
     return ranges;
 }
 
-diffresult calculate_interval_code_churn(
+diffresult calculate_code_churn(
     git_repository* repo, const interval interval, const char* extension) {
-    const char id[] = "calculate_interval_code_churn";
+    const char id[] = "calculate_code_churn";
 #if defined(DEBUG) || defined(TRACE)
     print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
 #endif
@@ -366,8 +366,6 @@ diffresult calculate_interval_code_churn(
     setenv("TC", "CEST", 1);
     git_time_t commit_time;
     const git_signature* signature;
-    git_oid last_commit;
-    git_time_t last_commit_time = 0;
     int time_string_length = strlen("2014-10-23 00:00") + 1;
     int num_commits = 0;
     diffresult total_diff;
@@ -381,36 +379,16 @@ diffresult calculate_interval_code_churn(
     List* authors = list_create();
     struct tm* tm;
     struct tm tm_min_time;
-    char from_time_string[time_string_length];
-    char to_time_string[time_string_length];
     git_time_t min_time = time(NULL);
 
     tm = gmtime(&min_time);
     tm_min_time = *tm;
 
-    /* set min_time to beginning of month or year */
-    switch (interval) {
-    case YEAR:
-        tm_min_time.tm_mon = 0;
-    /* fallthrough to also set to beginning of month */
-    case MONTH:
-        tm_min_time.tm_mday = 1;
-    }
-
-    /* set to 0:00:00 */
-    tm_min_time.tm_sec = 0;
-    tm_min_time.tm_min = 0;
-    tm_min_time.tm_hour = 0;
-
-    /* we have no information on daylight saving time*/
-    tm_min_time.tm_isdst = -1;
-
-    min_time = tm_to_utc(&tm_min_time);
-
     List* ranges = get_ranges(repo, interval);
 
 #if defined(DEBUG) || defined(TRACE)
-	print_debug("%s %s - Retrieved %d commit ranges\n", debug, id, ranges->size);
+    print_debug(
+        "%s %s - Retrieved %d commit ranges\n", debug, id, ranges->size);
 #endif
 
     Node* it = ranges->first;
@@ -452,13 +430,13 @@ diffresult calculate_interval_code_churn(
             strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
             print_debug(
                 "%s %s - Commit found: %s\n", debug, id, commit_time_string);
-			char cur_buf[GIT_OID_HEXSZ + 1];
-			char begin_buf[GIT_OID_HEXSZ + 1];
-			git_oid_fmt(cur_buf, &cur_oid);
-			cur_buf[GIT_OID_HEXSZ] = '\0';
-			git_oid_fmt(begin_buf, &range->begin);
-			begin_buf[GIT_OID_HEXSZ] = '\0';
-			printf("cur: %s\nbeg: %s\n", cur_buf, begin_buf);
+            char cur_buf[GIT_OID_HEXSZ + 1];
+            char begin_buf[GIT_OID_HEXSZ + 1];
+            git_oid_fmt(cur_buf, &cur_oid);
+            cur_buf[GIT_OID_HEXSZ] = '\0';
+            git_oid_fmt(begin_buf, &range->begin);
+            begin_buf[GIT_OID_HEXSZ] = '\0';
+            printf("cur: %s\nbeg: %s\n", cur_buf, begin_buf);
 #endif
 
             signature = git_commit_author(commit);
@@ -469,16 +447,16 @@ diffresult calculate_interval_code_churn(
             if (num_commits > 0) {
                 diffresult cur_diff
                     = calculate_diff(repo, &cur_oid, &prev_oid, extension);
-				add_diffs(&diff, &cur_diff);
+                add_diffs(&diff, &cur_diff);
             }
 
             if (!git_oid_equal(&cur_oid, &range->begin) || it->next == NULL) {
-				num_commits = num_commits + 1;
-				prev_oid = cur_oid;
+                num_commits = num_commits + 1;
+                prev_oid = cur_oid;
             } else {
-				add_diffs(&total_diff, &diff);
+                add_diffs(&total_diff, &diff);
                 break;
-			}
+            }
         }
 
 #if defined(DEBUG) || defined(TRACE)
@@ -495,113 +473,18 @@ diffresult calculate_interval_code_churn(
 
         /* cleanup */
         list_clear(authors);
-		range_free(range);
+        range_free(range);
 
-		diff.insertions = 0;
-		diff.deletions = 0;
-		diff.changes = 0;
-		num_commits = 0;
-		
-		it = it->next;
+        diff.insertions = 0;
+        diff.deletions = 0;
+        diff.changes = 0;
+        num_commits = 0;
+
+        it = it->next;
     }
 
     list_destroy(authors);
     list_destroy(ranges);
-    git_commit_free(commit);
-    git_revwalk_free(walk);
-
-    return total_diff;
-}
-
-diffresult calculate_code_churn(git_repository* repo, const char* extension) {
-    const char id[] = "calculate_code_churn";
-#if defined(DEBUG) || defined(TRACE)
-    print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
-#endif
-
-    /* walk over revisions and sum up code churn */
-    git_oid prev_oid;
-    git_oid cur_oid;
-    git_oid head;
-    git_revwalk* walk = NULL;
-    git_commit* commit;
-    const git_signature* signature;
-    git_time_t commit_time;
-    git_time_t first_commit_time = 0;
-    git_oid first_commit;
-    git_oid last_commit;
-    git_time_t last_commit_time = 0;
-    int time_string_length = strlen("2014-10-23 00:00") + 1;
-    int num_commits = 0;
-    diffresult total_diff;
-    total_diff.insertions = 0;
-    total_diff.deletions = 0;
-    total_diff.changes = 0;
-    struct tm* tm;
-    char from_time_string[time_string_length];
-    char to_time_string[time_string_length];
-
-    git_reference_name_to_id(&head, repo, "HEAD");
-    git_revwalk_new(&walk, repo);
-    git_revwalk_sorting(walk, GIT_SORT_TIME);
-    git_revwalk_push(walk, &head);
-
-    List* authors = list_create();
-
-    /* iterates over all commits starting with the latest one */
-    while (!git_revwalk_next(&cur_oid, walk)) {
-
-        git_commit_lookup(&commit, repo, &cur_oid);
-        commit_time = git_commit_time(commit);
-
-        if (last_commit_time == 0) {
-            last_commit_time = commit_time;
-            last_commit = cur_oid;
-        }
-
-#if defined(DEBUG) || defined(TRACE)
-        char commit_time_string[time_string_length];
-        tm = gmtime(&commit_time);
-        strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-        print_debug(
-            "%s %s - Commit found: %s\n", debug, id, commit_time_string);
-#endif
-
-        first_commit_time = commit_time;
-        first_commit = cur_oid;
-
-        signature = git_commit_author(commit);
-        if (!list_contains(authors, signature->name, string_compare)) {
-            list_add(authors, signature->name);
-        }
-
-        num_commits = num_commits + 1;
-
-        if (num_commits >= 2) {
-            diffresult cur_diff
-                = calculate_diff(repo, &prev_oid, &cur_oid, extension);
-            total_diff.insertions = total_diff.insertions + cur_diff.insertions;
-            total_diff.deletions = total_diff.deletions + cur_diff.deletions;
-            total_diff.changes = total_diff.changes + cur_diff.changes;
-        }
-
-        prev_oid = cur_oid;
-    }
-
-#if defined(DEBUG) || defined(TRACE)
-    char s[2] = "";
-    if (num_commits != 1) {
-        s[0] = 's';
-    }
-    print_debug("%s %s - %d commits found\n", debug, id, num_commits);
-#endif
-
-    /* print results */
-    print_results(repo, &first_commit, &last_commit, num_commits, total_diff,
-        authors->size, extension);
-
-    /* cleanup */
-    list_destroy(authors);
     git_commit_free(commit);
     git_revwalk_free(walk);
 
@@ -626,7 +509,7 @@ int main(int argc, char** argv) {
 
     /* parse arguments */
     int c;
-    interval interval = 0;
+    interval interval = NONE;
     bool count_only = false;
     char extension[255] = "";
 
@@ -759,12 +642,9 @@ int main(int argc, char** argv) {
             /* only count LOC, print result and exit */
             printf("%d\n",
                 calculate_loc_dir(git_repository_workdir(repo), extension));
-        } else if (interval > 0) {
-            print_csv_header();
-            calculate_interval_code_churn(repo, interval, extension);
         } else {
             print_csv_header();
-            calculate_code_churn(repo, extension);
+            calculate_code_churn(repo, interval, extension);
         }
 
         /* cleanup */
