@@ -39,9 +39,21 @@ typedef struct {
     unsigned long int changes;
 } diffresult;
 
+typedef struct {
+	git_oid begin;
+	git_oid end;
+} commit_range;
+
+typedef int interval;
+#define YEAR 1
+#define MONTH 2
+
 void print_debug(const char* format, ...);
 void print_error(const char* format, ...);
 void exit_error(const int err, const char* format, ...);
 git_time_t tm_to_utc(struct tm* tm);
+commit_range* range_create(git_oid begin, git_oid end);
+void range_free(commit_range* range);
+void add_diffs(diffresult* a, diffresult* b);
 
 #endif

@@ -48,10 +48,6 @@ void list_add(List* list, void* value) {
         list->last = new;
     }
 
-#if defined(DEBUG) || defined(TRACE)
-    printf("Added %s to list\n", value);
-#endif
-
     list->size = list->size + 1;
 }
 
@@ -90,6 +86,20 @@ void list_clear(List* list) {
     if (list->size != 0) {
         printf("Error: List has size %d after clear().\n", list->size);
     }
+}
+
+Node* List_get(List* list, int pos) {
+	if (pos >= list->size) {
+		return NULL;
+	}
+
+    Node* ptr = list->first;
+
+	for (int i = 0; i < pos; i++) {
+		ptr = ptr->next;
+	}
+
+	return ptr;
 }
 
 void list_destroy(List* list) {

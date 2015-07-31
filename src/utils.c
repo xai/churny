@@ -62,3 +62,20 @@ git_time_t tm_to_utc(struct tm* tm) {
     }
     return time;
 }
+
+commit_range* range_create(git_oid begin, git_oid end) {
+	commit_range* range = (commit_range*)malloc(sizeof(commit_range));
+	range->begin = begin;
+	range->end = end;
+	return range;
+}
+
+void range_free(commit_range* range) {
+	free(range);
+}
+
+void add_diffs(diffresult* a, diffresult* b) {
+	a->insertions += b->insertions;
+	a->deletions += b->deletions;
+	a->changes += b->changes;
+}

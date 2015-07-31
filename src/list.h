@@ -43,13 +43,16 @@ List* list_create();
 
 void list_add(List* list, void* value);
 
-bool list_contains(List* list, void* value, int (*cmp)(void const *, void const *));
+bool list_contains(
+    List* list, void* value, int (*cmp)(void const*, void const*));
 
 int list_size(List* list);
 
 void list_clear(List* list);
 
 void list_destroy(List* list);
+
+Node* List_get(List* list, int pos);
 
 int string_compare(void const* item1, void const* item2);
 
