@@ -63,14 +63,15 @@ git_time_t tm_to_utc(struct tm* tm) {
     return time;
 }
 
-commit_range* range_create(git_oid begin, git_oid end) {
+commit_range* range_create(List* commits, char* min_time) {
 	commit_range* range = (commit_range*)malloc(sizeof(commit_range));
-	range->begin = begin;
-	range->end = end;
+	range->commits = commits;
+	strcpy(range->min_time, min_time);
 	return range;
 }
 
 void range_free(commit_range* range) {
+	list_destroy(range->commits);
 	free(range);
 }
 

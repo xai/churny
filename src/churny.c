@@ -226,6 +226,9 @@ void print_results(git_repository* repo, const git_oid* first,
 List* get_ranges(git_repository* repo, const interval interval) {
     const char id[] = "get_ranges";
     List* ranges = list_create();
+    List* commits = list_create();
+	int num_commits = 0;
+	int total_commits = 0;
 
     git_oid head;
     git_oid prev_oid;
@@ -268,7 +271,7 @@ List* get_ranges(git_repository* repo, const interval interval) {
 
 #if defined(DEBUG) || defined(TRACE)
     strftime(from_time_string, time_string_length, "%F %H:%M", &tm_min_time);
-    print_debug("%s %s - Collecting commits until %s (%lu)\n", debug, id,
+    print_debug("%s %s - Collecting commits until %s (%lu)\n", trace, id,
         from_time_string, min_time);
 #endif
 
@@ -283,17 +286,10 @@ List* get_ranges(git_repository* repo, const interval interval) {
         git_commit_lookup(&commit, repo, &cur_oid);
         commit_time = git_commit_time(commit);
 
-        if (last_commit_time == 0) {
-            last_commit_time = commit_time;
-            last_commit = cur_oid;
-        }
-
 #if defined(DEBUG) || defined(TRACE)
-        char commit_time_string[time_string_length];
-        tm = gmtime(&commit_time);
-        strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-        print_debug("%s %s - Commit found: %s (%lu)\n", debug, id,
-            commit_time_string, commit_time);
+		char commit_time_string[time_string_length];
+		tm = gmtime(&commit_time);
+		strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
 #endif
 
         /* if the commit is not in the time interval,
@@ -302,13 +298,19 @@ List* get_ranges(git_repository* repo, const interval interval) {
 #if defined(DEBUG) || defined(TRACE)
             print_debug("%s %s - Commit is not in "
                         "specified time window: %s\n",
-                debug, id, commit_time_string);
+                trace, id, commit_time_string);
+			print_debug("%s %s - Range %s: %d commits\n", debug, id, from_time_string, num_commits);
 #endif
-            list_add(ranges, range_create(cur_oid, last_commit));
+
+			if (num_commits > 0) {
+				list_add(ranges, range_create(commits, from_time_string));
+			}
 
             // reset for next range
             last_commit = cur_oid;
             last_commit_time = commit_time;
+			commits = list_create();
+			num_commits = 0;
 
             while (commit_time < min_time) {
                 switch (interval) {
@@ -334,15 +336,41 @@ List* get_ranges(git_repository* repo, const interval interval) {
 #if defined(DEBUG) || defined(TRACE)
             strftime(
                 from_time_string, time_string_length, "%F %H:%M", &tm_min_time);
-            print_debug("%s %s - Collecting commits until %s\n", debug, id,
+            print_debug("%s %s - Collecting commits until %s\n", trace, id,
                 from_time_string);
 #endif
         }
 
+		if (last_commit_time == 0) {
+			last_commit_time = commit_time;
+			last_commit = cur_oid;
+		}
+
+		num_commits += 1;
+		total_commits += 1;
+		git_oid* new_commit = (git_oid*)malloc(sizeof(git_oid));
+		*new_commit = cur_oid;
+		list_add(commits, new_commit);
+
+#if defined(DEBUG) || defined(TRACE)
+		print_debug("%s %s - Commit found: %s (%lu)\n", trace, id,
+			commit_time_string, commit_time);
+		char cur_buf[GIT_OID_HEXSZ + 1];
+		git_oid_fmt(cur_buf, &cur_oid);
+		cur_buf[GIT_OID_HEXSZ] = '\0';
+		print_debug("%s %s - %s (%s)\n", debug, id, cur_buf, commit_time_string);
+#endif
+
         prev_oid = cur_oid;
     }
 
-    list_add(ranges, range_create(cur_oid, last_commit));
+	if (num_commits > 0) {
+		list_add(ranges, range_create(commits, from_time_string));
+	}
+
+#if defined(DEBUG) || defined(TRACE)
+	print_debug("%s %s - %d commits found in total.\n", debug, id, total_commits);
+#endif
 
     /* cleanup */
     git_commit_free(commit);
@@ -368,6 +396,7 @@ diffresult calculate_code_churn(
     const git_signature* signature;
     int time_string_length = strlen("2014-10-23 00:00") + 1;
     int num_commits = 0;
+    int total_commits = 0;
     diffresult total_diff;
     diffresult diff;
     total_diff.insertions = 0;
@@ -395,31 +424,12 @@ diffresult calculate_code_churn(
 
     while (it != NULL) {
         commit_range* range = (commit_range*)it->value;
-
-#if defined(DEBUG) || defined(TRACE)
-        char begin_time_string[time_string_length];
-        char end_time_string[time_string_length];
-
-        git_commit_lookup(&commit, repo, &range->begin);
-        commit_time = git_commit_time(commit);
-        tm = gmtime(&commit_time);
-        strftime(begin_time_string, time_string_length, "%F %H:%M", tm);
-
-        git_commit_lookup(&commit, repo, &range->end);
-        commit_time = git_commit_time(commit);
-        tm = gmtime(&commit_time);
-        strftime(end_time_string, time_string_length, "%F %H:%M", tm);
-
-        print_debug("%s %s - Analyzing from %s to %s\n", debug, id,
-            begin_time_string, end_time_string);
-#endif
-
-        git_revwalk_new(&walk, repo);
-        git_revwalk_sorting(walk, GIT_SORT_TIME);
-        git_revwalk_push(walk, &range->end);
+		List* commits = range->commits;
+		Node* commit_it = commits->first;
 
         /* iterates over all commits starting with the latest one */
-        while (!git_revwalk_next(&cur_oid, walk)) {
+        while (commit_it != NULL) {
+			cur_oid = *(git_oid*)commit_it->value;
 
             git_commit_lookup(&commit, repo, &cur_oid);
             commit_time = git_commit_time(commit);
@@ -428,47 +438,34 @@ diffresult calculate_code_churn(
             char commit_time_string[time_string_length];
             tm = gmtime(&commit_time);
             strftime(commit_time_string, time_string_length, "%F %H:%M", tm);
-            print_debug(
-                "%s %s - Commit found: %s\n", debug, id, commit_time_string);
             char cur_buf[GIT_OID_HEXSZ + 1];
-            char begin_buf[GIT_OID_HEXSZ + 1];
             git_oid_fmt(cur_buf, &cur_oid);
             cur_buf[GIT_OID_HEXSZ] = '\0';
-            git_oid_fmt(begin_buf, &range->begin);
-            begin_buf[GIT_OID_HEXSZ] = '\0';
-            printf("cur: %s\nbeg: %s\n", cur_buf, begin_buf);
+            print_debug("%s %s - %s (%s)\n", debug, id, cur_buf, commit_time_string);
 #endif
 
-            signature = git_commit_author(commit);
-            if (!list_contains(authors, signature->name, string_compare)) {
-                list_add(authors, signature->name);
-            }
+			num_commits += 1;
+			total_commits += 1;
 
-            if (num_commits > 0) {
-                diffresult cur_diff
-                    = calculate_diff(repo, &cur_oid, &prev_oid, extension);
-                add_diffs(&diff, &cur_diff);
-            }
+			signature = git_commit_author(commit);
+			if (!list_contains(authors, signature->name, string_compare)) {
+				list_add(authors, signature->name);
+			}
 
-            if (!git_oid_equal(&cur_oid, &range->begin) || it->next == NULL) {
-                num_commits = num_commits + 1;
-                prev_oid = cur_oid;
-            } else {
-                add_diffs(&total_diff, &diff);
-                break;
-            }
+			diffresult cur_diff = calculate_diff(repo, &cur_oid, &prev_oid, extension);
+			add_diffs(&diff, &cur_diff);
+			add_diffs(&total_diff, &cur_diff);
+
+			prev_oid = cur_oid;
+			commit_it = commit_it->next;
         }
 
 #if defined(DEBUG) || defined(TRACE)
-        char s[2] = "";
-        if (num_commits != 1) {
-            s[0] = 's';
-        }
-        print_debug("%s %s - %d commits analyzed\n", debug, id, num_commits);
+				print_debug("%s %s - Range %s: %d commits\n", debug, id, &range->min_time, num_commits);
 #endif
 
         /* print results */
-        print_results(repo, &range->begin, &range->end, num_commits, diff,
+        print_results(repo, &cur_oid, (git_oid*)commits->first->value, num_commits, diff,
             authors->size, extension);
 
         /* cleanup */
@@ -482,6 +479,10 @@ diffresult calculate_code_churn(
 
         it = it->next;
     }
+
+#if defined(DEBUG) || defined(TRACE)
+	print_debug("%s %s - %d commits analyzed in total\n", debug, id, total_commits);
+#endif
 
     list_destroy(authors);
     list_destroy(ranges);

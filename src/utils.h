@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <git2.h>
+#include <string.h>
+#include "list.h"
 
 extern const char fatal[];
 extern const char debug[];
@@ -40,8 +42,8 @@ typedef struct {
 } diffresult;
 
 typedef struct {
-	git_oid begin;
-	git_oid end;
+	List* commits;
+	char min_time[255];
 } commit_range;
 
 typedef int interval;
@@ -53,7 +55,7 @@ void print_debug(const char* format, ...);
 void print_error(const char* format, ...);
 void exit_error(const int err, const char* format, ...);
 git_time_t tm_to_utc(struct tm* tm);
-commit_range* range_create(git_oid begin, git_oid end);
+commit_range* range_create(List* commits, char* min_time);
 void range_free(commit_range* range);
 void add_diffs(diffresult* a, diffresult* b);
 
