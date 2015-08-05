@@ -459,7 +459,7 @@ diffresult calculate_code_churn(
 
             if (total_commits >= 2) {
                 diffresult cur_diff
-                    = calculate_diff(repo, &cur_oid, &prev_oid, extension);
+                    = calculate_diff(repo, &prev_oid, &cur_oid, extension);
                 add_diffs(&diff, &cur_diff);
                 add_diffs(&total_diff, &cur_diff);
             }
