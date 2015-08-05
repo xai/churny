@@ -38,6 +38,7 @@ void list_add(List* list, void* value) {
     }
 
     new->value = value;
+	new->prev = list->last;
     new->next = NULL;
 
     if (list->last == NULL) {
@@ -82,10 +83,6 @@ void list_clear(List* list) {
 
     list->first = NULL;
     list->last = NULL;
-
-    if (list->size != 0) {
-        printf("Error: List has size %d after clear().\n", list->size);
-    }
 }
 
 Node* List_get(List* list, int pos) {

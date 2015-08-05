@@ -31,6 +31,7 @@
 typedef struct Node {
     void* value;
     struct Node* next;
+    struct Node* prev;
 } Node;
 
 typedef struct List {
