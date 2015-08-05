@@ -402,13 +402,9 @@ diffresult calculate_code_churn(
     int num_commits = 0;
     int total_commits = 0;
     diffresult total_diff;
-    diffresult diff;
     total_diff.insertions = 0;
     total_diff.deletions = 0;
     total_diff.changes = 0;
-    diff.insertions = 0;
-    diff.deletions = 0;
-    diff.changes = 0;
     List* authors = list_create();
     struct tm* tm;
     struct tm tm_min_time;
@@ -430,6 +426,10 @@ diffresult calculate_code_churn(
         commit_range* range = (commit_range*)it->value;
         List* commits = range->commits;
         Node* commit_it = commits->last;
+        diffresult diff;
+        diff.insertions = 0;
+        diff.deletions = 0;
+        diff.changes = 0;
 
         /* iterates over all commits starting with the latest one */
         while (commit_it != NULL) {
@@ -480,11 +480,6 @@ diffresult calculate_code_churn(
         /* cleanup */
         list_clear(authors);
         range_free(range);
-
-        diff.insertions = 0;
-        diff.deletions = 0;
-        diff.changes = 0;
-        num_commits = 0;
 
         it = it->prev;
     }
