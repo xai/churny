@@ -10,6 +10,7 @@ from multiprocessing import Process, Queue
 from queue import Empty
 
 from github import Github
+from github.GithubException import UnknownObjectException
 from pygit2 import clone_repository, discover_repository, Repository
 
 
@@ -35,30 +36,35 @@ def analyze(url, api_token):
     start_time = time.perf_counter()
 
     g = Github(api_token)
-    repo = g.get_repo(github_url)
 
-    stats = open(os.path.join("github", repo.owner.login + "-" + repo.name), "w")
-    stats.write("forks;branches;watchers;stars\n")
-    stats.write("%d;%d;%d;%d\n"
-                % (repo.forks_count, len(list(repo.get_branches())),
-                   repo.watchers_count, repo.stargazers_count))
-    stats.flush()
-    stats.close()
+    try:
+        repo = g.get_repo(github_url)
 
-    repo_path = os.path.join(os.getcwd(), "git", repo.owner.login, repo.name)
+        stats = open(os.path.join("github", repo.owner.login + "-" + repo.name), "w")
+        stats.write("forks;branches;watchers;stars\n")
+        stats.write("%d;%d;%d;%d\n"
+                    % (repo.forks_count, len(list(repo.get_branches())),
+                       repo.watchers_count, repo.stargazers_count))
+        stats.flush()
+        stats.close()
 
-    # initialize repo
-    if os.path.exists(repo_path):
-        cloned_repo = Repository(discover_repository(repo_path))
-    else:
-        cloned_repo = clone_repository(repo.clone_url, repo_path)
+        repo_path = os.path.join(os.getcwd(), "git", repo.owner.login, repo.name)
 
-    # run churny
-    run("churny " + repo_path, os.path.join("overall", repo.owner.login + "-" + repo.name))
-    run("churny -m " + repo_path, os.path.join("monthly", repo.owner.login + "-" + repo.name))
+        # initialize repo
+        if os.path.exists(repo_path):
+            cloned_repo = Repository(discover_repository(repo_path))
+        else:
+            cloned_repo = clone_repository(repo.clone_url, repo_path)
 
-    elapsed_time = time.perf_counter() - start_time
-    print("Stop analyzing: %s (%d s)" % (github_url, elapsed_time))
+        # run churny
+        run("churny " + repo_path, os.path.join("overall", repo.owner.login + "-" + repo.name))
+        run("churny -m " + repo_path, os.path.join("monthly", repo.owner.login + "-" + repo.name))
+
+        elapsed_time = time.perf_counter() - start_time
+        print("Stop analyzing: %s (%d s)" % (github_url, elapsed_time))
+    except:
+        print("Error: cannot analyze %s" % url, file=sys.stderr)
+        pass
 
 
 def usage(path):
