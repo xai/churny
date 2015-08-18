@@ -399,7 +399,6 @@ diffresult calculate_code_churn(
     git_time_t commit_time;
     const git_signature* signature;
     int time_string_length = strlen("2014-10-23 00:00") + 1;
-    int num_commits = 0;
     int total_commits = 0;
     diffresult total_diff;
     total_diff.insertions = 0;
@@ -430,6 +429,7 @@ diffresult calculate_code_churn(
         diff.insertions = 0;
         diff.deletions = 0;
         diff.changes = 0;
+        int num_commits = 0;
 
         /* iterates over all commits starting with the latest one */
         while (commit_it != NULL) {
