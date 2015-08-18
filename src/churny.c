@@ -431,7 +431,7 @@ diffresult calculate_code_churn(
         diff.changes = 0;
         int num_commits = 0;
 
-        /* iterates over all commits starting with the latest one */
+        /* iterates over all commits starting with the oldest one */
         while (commit_it != NULL) {
             cur_oid = *(git_oid*)commit_it->value;
 
