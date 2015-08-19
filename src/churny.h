@@ -43,9 +43,10 @@ diffresult calculate_diff(git_repository* repo, const git_oid* prev,
 void print_results(git_repository* repo, const git_oid* first,
     const git_oid* last, const int num_commits, const diffresult diff,
     int number_authors, const char* extension);
-List* get_ranges(git_repository* repo, const interval interval);
-diffresult calculate_code_churn(
-    git_repository* repo, const interval interval, const char* extension);
+List* get_ranges(
+    git_repository* repo, const interval interval, git_time_t max_time);
+diffresult calculate_code_churn(git_repository* repo, const interval interval,
+    const char* extension, git_time_t max_time);
 int main(int argc, char** argv);
 
 #endif

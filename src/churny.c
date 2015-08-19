@@ -223,7 +223,8 @@ void print_results(git_repository* repo, const git_oid* first,
     }
 }
 
-List* get_ranges(git_repository* repo, const interval interval) {
+List* get_ranges(
+    git_repository* repo, const interval interval, git_time_t max_time) {
     const char id[] = "get_ranges";
     List* ranges = list_create();
     List* commits = list_create();
@@ -240,12 +241,17 @@ List* get_ranges(git_repository* repo, const interval interval) {
     git_time_t commit_time;
     git_time_t last_commit_time = 0;
     struct tm* tm;
+    struct tm tm_max_time;
     struct tm tm_min_time;
     git_time_t min_time = time(NULL);
 
     int time_string_length = strlen("2014-10-23 00:00") + 1;
     char from_time_string[time_string_length];
+    char max_time_string[time_string_length];
     char to_time_string[time_string_length];
+
+    tm = gmtime(&max_time);
+    strftime(max_time_string, time_string_length, "%F %H:%M", tm);
 
     tm = gmtime(&min_time);
     tm_min_time = *tm;
@@ -296,6 +302,14 @@ List* get_ranges(git_repository* repo, const interval interval) {
         print_debug("%s %s - Commit found: %s (%s [%lu])\n", trace, id, cur_buf,
             commit_time_string, commit_time);
 #endif
+        if (commit_time > max_time) {
+#if defined(DEBUG) || defined(TRACE)
+            print_debug("%s %s - Commit is newer than max_time "
+                        ": (%s) > (%s)\n",
+                trace, id, commit_time_string, max_time_string);
+#endif
+            continue;
+        }
 
         /* if the commit is not in the time interval,
          * add range and continue */
@@ -383,8 +397,8 @@ List* get_ranges(git_repository* repo, const interval interval) {
     return ranges;
 }
 
-diffresult calculate_code_churn(
-    git_repository* repo, const interval interval, const char* extension) {
+diffresult calculate_code_churn(git_repository* repo, const interval interval,
+    const char* extension, git_time_t max_time) {
     const char id[] = "calculate_code_churn";
 #if defined(DEBUG) || defined(TRACE)
     print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -412,7 +426,7 @@ diffresult calculate_code_churn(
     tm = gmtime(&min_time);
     tm_min_time = *tm;
 
-    List* ranges = get_ranges(repo, interval);
+    List* ranges = get_ranges(repo, interval, max_time);
 
 #if defined(DEBUG) || defined(TRACE)
     print_debug(
@@ -518,8 +532,9 @@ int main(int argc, char** argv) {
     interval interval = NONE;
     bool count_only = false;
     char extension[255] = "";
+    git_time_t max_time = time(NULL);
 
-    while ((c = getopt(argc, argv, "chjl:my")) != -1) {
+    while ((c = getopt(argc, argv, "chjl:myu:")) != -1) {
         switch (c) {
         case 'h':
             usage(argv[0]);
@@ -532,6 +547,9 @@ int main(int argc, char** argv) {
             break;
         case 'm':
             interval = MONTH;
+            break;
+        case 'u':
+            max_time = atol(optarg);
             break;
         case 'y':
             interval = YEAR;
@@ -650,7 +668,7 @@ int main(int argc, char** argv) {
                 calculate_loc_dir(git_repository_workdir(repo), extension));
         } else {
             print_csv_header();
-            calculate_code_churn(repo, interval, extension);
+            calculate_code_churn(repo, interval, extension, max_time);
         }
 
         /* cleanup */
