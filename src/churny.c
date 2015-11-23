@@ -583,7 +583,7 @@ int main(int argc, char** argv) {
             strcat(gitmetadir, "/.git");
             err = stat(gitmetadir, &s);
             if (err != -1 && S_ISDIR(s.st_mode)) {
-/* seems to be a git repository */
+                /* seems to be a git repository */
 #if defined(DEBUG) || defined(TRACE)
                 print_debug("%s %s - Is a git "
                             "repository: %s\n",
@@ -629,7 +629,7 @@ int main(int argc, char** argv) {
         }
         break;
     case 2:
-/* either two tars or two directories are expected */
+        /* either two tars or two directories are expected */
 #if defined(DEBUG) || defined(TRACE)
         print_debug("%s %s - Expecting two tars or two "
                     "directories\n",
