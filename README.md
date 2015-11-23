@@ -12,8 +12,14 @@ http://libgit2.github.com.
 
 Currently supported are versions 0.21 and 0.22.
 
-If you have libgit2 installed, just run `make` to compile a binary. Then
-run `./churny -h` to print information on its usage.
+This particular branch has an external dependency to jdime, a
+structured diffing and merging tool that is not yet publicly available
+in its current version. I am currently working really hard on
+releasing jdime as an open source project. Such a release can be
+expected about end of december.
+
+If you have libgit2 and jdime installed, just run `make` to compile a
+binary. Then run './churny -h' to print information on its usage.
 
 Note: there is also a bash script in this repository that also
 calculates code churn, but is no longer updated.

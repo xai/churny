@@ -35,21 +35,23 @@
 #include "utils.h"
 #include "loc.h"
 #include "list.h"
+#include "jdime.h"
 
 typedef int interval;
 #define YEAR 1
 #define MONTH 2
 
 static void usage(const char* basename);
-static void print_csv_header();
+static void print_csv_header(const bool run_jdime);
 diffresult calculate_diff(git_repository* repo, const git_oid* prev,
     const git_oid* cur, const char* extension);
 void print_results(git_repository* repo, const git_oid* first,
     const git_oid* last, const int num_commits, const diffresult diff,
-    int number_authors, const char* extension);
-diffresult calculate_interval_code_churn(
-    git_repository* repo, const interval interval, const char* extension);
-diffresult calculate_code_churn(git_repository* repo, const char* extension);
+    int number_authors, const char* extension, const bool run_jdime);
+diffresult calculate_interval_code_churn(git_repository* repo,
+    const interval interval, const char* extension, const bool run_jdime);
+diffresult calculate_code_churn(
+    git_repository* repo, const char* extension, const bool run_jdime);
 int main(int argc, char** argv);
 
 #endif

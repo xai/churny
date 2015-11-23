@@ -34,16 +34,26 @@
 void static usage(const char* basename) {
     printf("Usage: %s [option]... [file]\n", basename);
     printf("  h\tPrints this message\n");
-    printf("  c\tOnly count lines of code\n");
+    printf("  j run jdime for more statistics\n");
     printf("  m calculate churn separately for each month\n");
     printf("  y calculate churn separately for each year\n");
     printf("\n");
 }
 
-void static print_csv_header() {
-    printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;"
-                   "Authors;Base LoC;Last LoC;Ratio;Added LoC;"
-                   "Removed LoC;Changed LoC;Relative Code Churn");
+void static print_csv_header(const bool run_jdime) {
+    char csv_header[4096];
+    strcpy(csv_header, "Base Date;Last Date;Base Id; Last Id;"
+                       "Commits;Authors;Base LoC;Last LoC;Ratio;Added LoC;"
+                       "Removed LoC;Changed LoC;Relative Code Churn");
+
+    if (run_jdime) {
+        char* jdime_csv_header = print_jdime_csv_header();
+        strcat(csv_header, ";");
+        strcat(csv_header, jdime_csv_header);
+        free(jdime_csv_header);
+    }
+
+    printf("%s\n", csv_header);
 }
 
 diffresult calculate_diff(git_repository* repo, const git_oid* prev,
@@ -141,8 +151,8 @@ diffresult calculate_diff(git_repository* repo, const git_oid* prev,
     result.changes = result.insertions + result.deletions;
 
 #ifdef TRACE
-    print_debug("%s %s - %d insertions + %d deletions "
-                "= %d changed lines\n",
+    print_debug("%s %s - %d insertions + %d deletions = "
+                "%d changed lines\n",
         trace, id, result.insertions, result.deletions, result.changes);
 #endif
 
@@ -170,7 +180,7 @@ diffresult calculate_diff(git_repository* repo, const git_oid* prev,
 
 void print_results(git_repository* repo, const git_oid* first,
     const git_oid* last, const int num_commits, const diffresult diff,
-    int number_authors, const char* extension) {
+    int number_authors, const char* extension, const bool run_jdime) {
     if (num_commits > 1) {
         git_commit* first_commit;
         git_commit* last_commit;
@@ -197,6 +207,11 @@ void print_results(git_repository* repo, const git_oid* first,
         tm = gmtime(&last_commit_time);
         strftime(last_time_string, time_string_length, "%F %H:%M", tm);
 
+        char* jdime_csv = NULL;
+        if (run_jdime) {
+            jdime_csv = run_jdime_diff(repo, first, last);
+        }
+
         /* count lines of code */
         int first_loc = calculate_loc(repo, first, extension);
         int last_loc = calculate_loc(repo, last, extension);
@@ -208,12 +223,22 @@ void print_results(git_repository* repo, const git_oid* first,
         churn = last_loc == 0 ? 0 : (double)diff.changes / (double)last_loc;
 
         /* print results */
-        char results[1024 + 1];
+        size_t jdime_csv_size = jdime_csv == NULL ? 0 : strlen(jdime_csv) + 1;
+        char results[1024 + jdime_csv_size + 1];
         sprintf(results, "%s;%s;%s;%s;%d;%d;%d;%d;%.2f;%lu;"
-                         "%lu;%lu;%.2f\n",
+                         "%lu;%lu;%.2f",
             first_time_string, last_time_string, first_buf, last_buf,
             num_commits, number_authors, first_loc, last_loc, ratio,
             diff.insertions, diff.deletions, diff.changes, churn);
+
+        if (run_jdime) {
+            /* join csv lines */
+            strcat(results, ";");
+            strcat(results, jdime_csv);
+            free(jdime_csv);
+        } else {
+            strcat(results, "\n");
+        }
 
         printf("%s", results);
 
@@ -223,8 +248,8 @@ void print_results(git_repository* repo, const git_oid* first,
     }
 }
 
-diffresult calculate_interval_code_churn(
-    git_repository* repo, const interval interval, const char* extension) {
+diffresult calculate_interval_code_churn(git_repository* repo,
+    const interval interval, const char* extension, const bool run_jdime) {
     const char id[] = "calculate_interval_code_churn";
 #if defined(DEBUG) || defined(TRACE)
     print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -333,7 +358,7 @@ diffresult calculate_interval_code_churn(
             /* print results, reset counters
              *  and continue */
             print_results(repo, &cur_oid, &last_commit, num_commits, diff,
-                list->size, extension);
+                list->size, extension, run_jdime);
 
             /* reset counters */
             if (num_commits > 1) {
@@ -383,8 +408,8 @@ diffresult calculate_interval_code_churn(
         prev_oid = cur_oid;
     }
 
-    print_results(
-        repo, &cur_oid, &last_commit, num_commits, diff, list->size, extension);
+    print_results(repo, &cur_oid, &last_commit, num_commits, diff, list->size,
+        extension, run_jdime);
 
 #if defined(DEBUG) || defined(TRACE)
     char s[2] = "";
@@ -404,7 +429,8 @@ diffresult calculate_interval_code_churn(
     return total_diff;
 }
 
-diffresult calculate_code_churn(git_repository* repo, const char* extension) {
+diffresult calculate_code_churn(
+    git_repository* repo, const char* extension, const bool run_jdime) {
     const char id[] = "calculate_code_churn";
 #if defined(DEBUG) || defined(TRACE)
     print_debug("%s %s - %s\n", debug, id, git_repository_workdir(repo));
@@ -489,7 +515,7 @@ diffresult calculate_code_churn(git_repository* repo, const char* extension) {
 
     /* print results */
     print_results(repo, &first_commit, &last_commit, num_commits, total_diff,
-        list->size, extension);
+        list->size, extension, run_jdime);
 
     /* cleanup */
     list_destroy(list);
@@ -518,16 +544,16 @@ int main(int argc, char** argv) {
     /* parse arguments */
     int c;
     interval interval = 0;
-    bool count_only = false;
     char extension[255] = "";
+    bool run_jdime = false;
 
-    while ((c = getopt(argc, argv, "chjl:my")) != -1) {
+    while ((c = getopt(argc, argv, "hjl:my")) != -1) {
         switch (c) {
         case 'h':
             usage(argv[0]);
             return EXIT_SUCCESS;
-        case 'c':
-            count_only = true;
+        case 'j':
+            run_jdime = true;
             break;
         case 'l':
             strcpy(extension, optarg);
@@ -583,7 +609,7 @@ int main(int argc, char** argv) {
             strcat(gitmetadir, "/.git");
             err = stat(gitmetadir, &s);
             if (err != -1 && S_ISDIR(s.st_mode)) {
-                /* seems to be a git repository */
+            /* seems to be a git repository */
 #if defined(DEBUG) || defined(TRACE)
                 print_debug("%s %s - Is a git "
                             "repository: %s\n",
@@ -594,9 +620,9 @@ int main(int argc, char** argv) {
 #if LG_VERSION >= 22
                 git_libgit2_init();
 #elif LG_VERSION >= 21
-				git_threads_init();
+                git_threads_init();
 #else
-# error libgit2 < 0.21 is not supported
+#error libgit2 < 0.21 is not supported
 #endif
                 if (git_repository_open(&repo, path) == 0) {
 
@@ -629,7 +655,7 @@ int main(int argc, char** argv) {
         }
         break;
     case 2:
-        /* either two tars or two directories are expected */
+    /* either two tars or two directories are expected */
 #if defined(DEBUG) || defined(TRACE)
         print_debug("%s %s - Expecting two tars or two "
                     "directories\n",
@@ -645,17 +671,13 @@ int main(int argc, char** argv) {
     }
 
     if (repo != NULL) {
+        print_csv_header(run_jdime);
+
         /* run the actual analysis */
-        if (count_only) {
-            /* only count LOC, print result and exit */
-            printf("%d\n",
-                calculate_loc_dir(git_repository_workdir(repo), extension));
-        } else if (interval > 0) {
-            print_csv_header();
-            calculate_interval_code_churn(repo, interval, extension);
+        if (interval > 0) {
+            calculate_interval_code_churn(repo, interval, extension, run_jdime);
         } else {
-            print_csv_header();
-            calculate_code_churn(repo, extension);
+            calculate_code_churn(repo, extension, run_jdime);
         }
 
         /* cleanup */
@@ -665,9 +687,9 @@ int main(int argc, char** argv) {
 #if LG_VERSION >= 22
     git_libgit2_shutdown();
 #elif LG_VERSION >= 21
-	git_threads_shutdown();
+    git_threads_shutdown();
 #else
-# error libgit2 < 0.21 is not supported
+#error libgit2 < 0.21 is not supported
 #endif
     return EXIT_SUCCESS;
 }

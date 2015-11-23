@@ -20,14 +20,18 @@
  *     Olaf Lessenich <lessenic@fim.uni-passau.de>
  */
 
-#ifndef LOC_H_ /* include guard */
-#define LOC_H_
+#ifndef JDIME_H_ /* Include guard */
+#define JDIME_H_
 
-#include <git2.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "utils.h"
+#include <unistd.h>
+#include <sys/stat.h>
+#include <git2.h>
 
-int calculate_loc(
-    git_repository* repo, const git_oid* oid, const char* extension);
+char* print_jdime_csv_header(void);
+char* run_jdime_diff(
+    git_repository* repo, const git_oid* prev, const git_oid* cur);
 
 #endif

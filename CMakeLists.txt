@@ -13,6 +13,8 @@ set(SOURCE_FILES
     src/loc.c
     src/loc.h
     src/utils.c
-    src/utils.h)
+    src/utils.h
+	src/jdime.c
+	src/jdime.h)
 
 add_executable(churny ${SOURCE_FILES})
