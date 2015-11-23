@@ -591,7 +591,13 @@ int main(int argc, char** argv) {
 #endif
 
                 /* initialize repo */
+#if LG_VERSION >= 22
                 git_libgit2_init();
+#elif LG_VERSION >= 21
+				git_threads_init();
+#else
+# error libgit2 < 0.21 is not supported
+#endif
                 if (git_repository_open(&repo, path) == 0) {
 
 #if defined(DEBUG) || defined(TRACE)
@@ -656,6 +662,12 @@ int main(int argc, char** argv) {
         git_repository_free(repo);
     }
 
+#if LG_VERSION >= 22
     git_libgit2_shutdown();
+#elif LG_VERSION >= 21
+	git_threads_shutdown();
+#else
+# error libgit2 < 0.21 is not supported
+#endif
     return EXIT_SUCCESS;
 }
