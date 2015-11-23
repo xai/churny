@@ -189,12 +189,10 @@ void print_results(git_repository* repo, const git_oid* first,
         int time_string_length = strlen("2014-10-23") + 1;
         char first_time_string[time_string_length];
         char last_time_string[time_string_length];
-        char first_buf[GIT_OID_HEXSZ + 1];
-        char last_buf[GIT_OID_HEXSZ + 1];
-        git_oid_fmt(first_buf, first);
-        first_buf[GIT_OID_HEXSZ] = '\0';
-        git_oid_fmt(last_buf, last);
-        last_buf[GIT_OID_HEXSZ] = '\0';
+        char first_sha[10] = {0};
+        char last_sha[10] = {0};
+        git_oid_tostr(first_sha, 9, first);
+        git_oid_tostr(last_sha, 9, last);
         struct tm* tm;
 
         git_commit_lookup(&first_commit, repo, first);
@@ -227,7 +225,7 @@ void print_results(git_repository* repo, const git_oid* first,
         char results[1024 + jdime_csv_size + 1];
         sprintf(results, "%s;%s;%s;%s;%d;%d;%d;%d;%.2f;%lu;"
                          "%lu;%lu;%.2f",
-            first_time_string, last_time_string, first_buf, last_buf,
+            first_time_string, last_time_string, first_sha, last_sha,
             num_commits, number_authors, first_loc, last_loc, ratio,
             diff.insertions, diff.deletions, diff.changes, churn);
 
