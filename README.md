@@ -8,16 +8,23 @@ Just a small code churn analysis tool
 
 As a requirement, libgit2 has to be installed. There are packages for
 many popular distributions, otherwise have a look at
-http://libgit2.github.com.
+http://libgit2.github.com.  
+Also, you need cmake.
 
-Currently supported are versions 0.21 and 0.22.
+If you have cmake and libgit2 installed, compile the project as follows:
+```
+git clone https://github.com/xai/churny
+mkdir build
+cd build
+cmake ..
+make
+```
 
-If you have libgit2 installed, just run `make` to compile a binary. Then
-run `./churny -h` to print information on its usage.
+Now you can run `./churny -h` to print information on its usage.
 
 Note: there is also a bash script in this repository that also
 calculates code churn, but is no longer updated.
 
 ### Who do I talk to? ###
 
-Olaf Lessenich (lessenic@fim.uni-passau.de)
+Olaf Lessenich (xai@linux.com)

@@ -31,7 +31,7 @@
 
 #include "churny.h"
 
-void static usage(const char* basename) {
+static void usage(const char* basename) {
     printf("Usage: %s [option]... [file]\n", basename);
     printf("  h\tPrints this message\n");
     printf("  c\tOnly count lines of code\n");
@@ -40,7 +40,7 @@ void static usage(const char* basename) {
     printf("\n");
 }
 
-void static print_csv_header() {
+static void print_csv_header() {
     printf("%s\n", "Base Date;Last Date;Base Id; Last Id;Commits;"
                    "Authors;Base LoC;Last LoC;Ratio;Added LoC;"
                    "Removed LoC;Changed LoC;Relative Code Churn");
@@ -589,13 +589,7 @@ int main(int argc, char** argv) {
 #endif
 
                 /* initialize repo */
-#if LG_VERSION >= 22
                 git_libgit2_init();
-#elif LG_VERSION >= 21
-				git_threads_init();
-#else
-# error libgit2 < 0.21 is not supported
-#endif
                 if (git_repository_open(&repo, path) == 0) {
 
 #if defined(DEBUG) || defined(TRACE)
@@ -660,12 +654,6 @@ int main(int argc, char** argv) {
         git_repository_free(repo);
     }
 
-#if LG_VERSION >= 22
     git_libgit2_shutdown();
-#elif LG_VERSION >= 21
-	git_threads_shutdown();
-#else
-# error libgit2 < 0.21 is not supported
-#endif
     return EXIT_SUCCESS;
 }

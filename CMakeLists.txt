@@ -1,18 +1,12 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(churny)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lgit2")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+aux_source_directory(./src SOURCE_FILES)
+find_package(libgit2 REQUIRED)
+include_directories(${LIBGIT2_INCLUDE_DIR})
+set(LIBS ${LIBS} ${LIBGIT2_LIBRARIES})
+add_executable(${PROJECT_NAME} ${SOURCE_FILES})
+target_link_libraries(${PROJECT_NAME} ${LIBS})
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -lgit2")
-
-set(SOURCE_FILES
-    src/churny.c
-    src/churny.h
-    src/list.c
-    src/list.h
-    src/loc.c
-    src/loc.h
-    src/utils.c
-    src/utils.h)
-
-add_executable(churny ${SOURCE_FILES})
+add_compile_options(-Wall -Wextra -pedantic -Werror)
